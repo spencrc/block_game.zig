@@ -1,0 +1,17 @@
+name: zig
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: [ubuntu-latest, macos-latest, windows-latest]
+    name: Build
+    steps:
+      - uses: actions/checkout@v3
+      - uses: mlugg/setup-zig@v2
+      
+      - name: Validate formatting
+        run: zig fmt --check src
+
+      - name: Build block_game.zig
+        run: zig build
