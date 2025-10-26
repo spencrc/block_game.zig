@@ -1,5 +1,5 @@
 const std = @import("std");
-const cimgui = @import("cimgui");
+// const cimgui = @import("cimgui");
 const shdc = @import("shdc");
 
 // Although this function looks imperative, it does not perform the build
@@ -16,20 +16,20 @@ pub fn build(b: *std.Build) void {
 
     // Get the matching Zig module name, C header search path and C library for
     // vanilla imgui vs the imgui docking branch.
-    const cimgui_conf = cimgui.getConfig(opt_docking);
+    // const cimgui_conf = cimgui.getConfig(opt_docking);
 
     const dep_sokol = b.dependency("sokol", .{
         .target = target,
         .optimize = optimize,
-        .with_sokol_imgui = true,
+        //.with_sokol_imgui = true,
     });
-    const dep_cimgui = b.dependency("cimgui", .{
-        .target = target,
-        .optimize = optimize,
-    });
+    // const dep_cimgui = b.dependency("cimgui", .{
+    //     .target = target,
+    //     .optimize = optimize,
+    // });
 
     // inject the cimgui header search path into the sokol C library compile step
-    dep_sokol.artifact("sokol_clib").addIncludePath(dep_cimgui.path(cimgui_conf.include_dir));
+    // dep_sokol.artifact("sokol_clib").addIncludePath(dep_cimgui.path(cimgui_conf.include_dir));
 
     const mod_main = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
@@ -37,7 +37,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .imports = &.{
             .{ .name = "sokol", .module = dep_sokol.module("sokol") },
-            .{ .name = cimgui_conf.module_name, .module = dep_cimgui.module(cimgui_conf.module_name) },
+            //.{ .name = cimgui_conf.module_name, .module = dep_cimgui.module(cimgui_conf.module_name) },
         },
     });
     const mod_options = b.addOptions();
