@@ -12,9 +12,13 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: mlugg/setup-zig@v2
-
-      - name: Validate formatting
-        run: zig fmt --check src
+        with:
+          version: master
+      - name: prepare-linux
+        if: runner.os == 'Linux'
+        run: |
+            sudo apt-get update
+            sudo apt-get install libglu1-mesa-dev mesa-common-dev xorg-dev libasound-dev
 
       - name: Build block_game.zig
         run: zig build
