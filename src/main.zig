@@ -136,11 +136,12 @@ export fn event(ev: [*c]const sapp.Event) void {
     if (ev.*.type == .MOUSE_DOWN) {
         if (ev.*.mouse_button == .LEFT) {
             state.mouse_captured = true;
-            std.debug.print("we clicking down...\n", .{});
+            sapp.lockMouse(true);
         }
     } else if (ev.*.type == .MOUSE_UP) {
         if (ev.*.mouse_button == .LEFT) {
             state.mouse_captured = false;
+            sapp.lockMouse(false);
         }
     } else if (ev.*.type == .MOUSE_MOVE) {
         if (state.mouse_captured == false) {
