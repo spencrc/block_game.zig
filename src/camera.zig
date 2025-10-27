@@ -6,39 +6,59 @@ const vec2 = @import("math.zig").Vec2;
 const vec3 = @import("math.zig").Vec3;
 const mat4 = @import("math.zig").Mat4;
 
-position: vec3 = vec3{ .x = 0.0, .y = 0.0, .z = 5.0 },
-rotation: vec2 = vec2{ .x = math.tau / 4.0, .y = 0 },
+const STARTING_POSITION: vec3 = vec3{ .x = 0.0, .y = 0.0, .z = 5.0 };
+
+position: vec3 = STARTING_POSITION,
+yaw: f32 = 0,
+pitch: f32 = 0,
 input: vec3 = vec3.zero(),
-view: mat4 = mat4.lookat(.{ .x = 0.0, .y = 0, .z = 5 }, vec3.zero(), vec3.up()),
-proj: mat4 = undefined,
+target: vec3 = vec3.zero(),
+proj: mat4 = mat4.lookat(STARTING_POSITION, vec3.zero(), vec3.up()),
+view: mat4 = mat4.persp(90.0, 1, 0.1, 500),
 
 pub fn init() Camera {
     return .{};
 }
 
+const speed = 1;
 pub fn update_camera(self: *Camera, dt: f32) void {
-    if (self.input.x == 0 and self.input.y == 0 and self.input.z == 0)
-        return;
-
-    const speed = 1;
     const multiplier = speed * dt;
-    const angle = self.rotation.x + math.atan2(self.input.z, self.input.x) - math.tau / 4.0;
 
-    self.position.y += self.input.y * multiplier;
-    self.position.x += @cos(angle) * multiplier;
-    self.position.z += @sin(angle) * multiplier;
+    const ch = @cos(self.yaw);
+    const sh = @sin(self.yaw);
+    const cp = @cos(self.pitch);
+    const sp = @sin(self.pitch);
+    //code following this line was adapted from here: https://github.com/nadako/hello-sokol-odin/blob/master/main.odin
+    const forward = vec3{ .x = cp * sh, .y = sp, .z = -cp * ch };
+    const right = vec3{ .x = ch, .y = 0.0, .z = sh };
+
+    const move_dir = vec3.add(vec3.mul(forward, self.input.y), vec3.mul(right, self.input.x));
+    const motion = vec3.mul(vec3.norm(move_dir), multiplier);
+
+    self.position.x += motion.x;
+    self.position.y += motion.y;
+    self.position.z += motion.z;
+
+    self.target = vec3.add(self.position, forward);
 }
 
 pub fn update_matricies(self: *Camera, width: f32, height: f32) void {
-    //TODO: this function currently only works if you are just rotating (so update_camera is disabled). we don't want that, so please re-write to use non-chatgpt code :]
     self.proj = mat4.persp(90.0, width / height, 0.1, 500);
+    self.view = mat4.lookat(self.position, self.target, vec3.up());
+}
 
-    const yaw = -(self.rotation.x - math.tau / 4.0); //god bless chatgpt i pray this works
-    const pitch = self.rotation.y;
-    const target = vec3.add(self.position, vec3{ //based on obiwac's 2d rotation implementation in python
-        .x = @cos(pitch) * @sin(yaw),
-        .y = @sin(pitch),
-        .z = -@cos(pitch) * @cos(yaw),
-    });
-    self.view = mat4.lookat(self.position, target, vec3.up());
+const sens = 0.004;
+pub fn handle_mouse_movement(self: *Camera, is_mouse_locked: bool, dx: f32, dy: f32) void {
+    if (!is_mouse_locked)
+        return;
+
+    self.yaw -= dx * sens;
+    self.pitch -= dy * sens;
+    //wrap yap to be in interval [0, 360]
+    self.yaw = @mod(self.yaw, 2 * math.pi);
+    if (self.yaw < 0) {
+        self.yaw += 2 * math.pi;
+    }
+    //clamp pitch to be in interval [-90, 90]
+    self.pitch = @max(-math.pi / 2.0, @min(math.pi / 2.0, self.pitch));
 }
