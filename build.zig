@@ -31,12 +31,18 @@ pub fn build(b: *std.Build) void {
     // inject the cimgui header search path into the sokol C library compile step
     // dep_sokol.artifact("sokol_clib").addIncludePath(dep_cimgui.path(cimgui_conf.include_dir));
 
+    const dep_zstbi = b.dependency("zstbi", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     const mod_main = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
         .imports = &.{
             .{ .name = "sokol", .module = dep_sokol.module("sokol") },
+            .{ .name = "zstbi", .module = dep_zstbi.module("root") },
             //.{ .name = cimgui_conf.module_name, .module = dep_cimgui.module(cimgui_conf.module_name) },
         },
     });
@@ -65,8 +71,8 @@ pub fn build(b: *std.Build) void {
     // call shdc.createSourceFile() helper function, this returns a `!*Build.Step`:
     const shdc_step: *std.Build.Step = shdc.createSourceFile(b, .{
         .shdc_dep = dep_shdc,
-        .input = "src/shaders/triangle.glsl",
-        .output = "src/shaders/triangle.glsl.zig",
+        .input = "src/shaders/texcube.glsl",
+        .output = "src/shaders/texcube.glsl.zig",
         .slang = .{
             .glsl410 = true,
             .glsl300es = true,

@@ -1,3 +1,5 @@
+const std = @import("std");
+const builtin = @import("builtin");
 const sokol = @import("sokol");
 const slog = sokol.log;
 const sg = sokol.gfx;
@@ -5,8 +7,10 @@ const sapp = sokol.app;
 const sglue = sokol.glue;
 const vec3 = @import("math.zig").Vec3;
 const mat4 = @import("math.zig").Mat4;
-const shd = @import("shaders/triangle.glsl.zig");
+const shd = @import("shaders/texcube.glsl.zig");
+const zstbi = @import("zstbi");
 
+const Image = zstbi.Image;
 const Camera = @import("camera.zig");
 
 const state = struct {
@@ -15,9 +19,10 @@ const state = struct {
     var pass_action: sg.PassAction = .{};
     var rx: f32 = 0.0;
     var ry: f32 = 0.0;
-    //const view: mat4 = mat4.lookat(.{ .x = 0.0, .y = 0, .z = 5 }, vec3.zero(), vec3.up());
     var cam: Camera = Camera.init();
 };
+
+const Vertex = extern struct { x: f32, y: f32, z: f32, u: f32, v: f32 };
 
 export fn init() void {
     // initialize sokol-gfx
@@ -26,39 +31,58 @@ export fn init() void {
         .logger = .{ .func = slog.func },
     });
 
+    //initialize appropiate allocator (TODO: move this to somewhere better T-T)
+    var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
+    const allocator: std.mem.Allocator = allocator: {
+        if (builtin.os.tag == .wasi) break :allocator std.heap.wasm_allocator;
+        break :allocator switch (builtin.mode) {
+            .Debug, .ReleaseSafe => debug_allocator.allocator(),
+            .ReleaseFast, .ReleaseSmall => std.heap.smp_allocator,
+        };
+    };
+    const is_debug: bool = allocator: {
+        if (builtin.os.tag == .wasi) break :allocator false;
+        break :allocator switch (builtin.mode) {
+            .Debug, .ReleaseSafe => true,
+            .ReleaseFast, .ReleaseSmall => false,
+        };
+    };
+    defer if (is_debug) {
+        _ = debug_allocator.deinit();
+    };
+
     // create vertex buffer with triangle vertices
     state.bind.vertex_buffers[0] = sg.makeBuffer(.{
-        .data = sg.asRange(&[_]f32{
-            // positions        colors
-            -1.0, -1.0, -1.0, 1.0, 0.0, 0.0, 1.0,
-            1.0,  -1.0, -1.0, 1.0, 0.0, 0.0, 1.0,
-            1.0,  1.0,  -1.0, 1.0, 0.0, 0.0, 1.0,
-            -1.0, 1.0,  -1.0, 1.0, 0.0, 0.0, 1.0,
+        .data = sg.asRange(&[_]Vertex{
+            .{ .x = -1.0, .y = -1.0, .z = -1.0, .u = 0.0, .v = 0.0 },
+            .{ .x = 1.0, .y = -1.0, .z = -1.0, .u = 1.0, .v = 0.0 },
+            .{ .x = 1.0, .y = 1.0, .z = -1.0, .u = 1.0, .v = 1.0 },
+            .{ .x = -1.0, .y = 1.0, .z = -1.0, .u = 0.0, .v = 1.0 },
 
-            -1.0, -1.0, 1.0,  0.0, 1.0, 0.0, 1.0,
-            1.0,  -1.0, 1.0,  0.0, 1.0, 0.0, 1.0,
-            1.0,  1.0,  1.0,  0.0, 1.0, 0.0, 1.0,
-            -1.0, 1.0,  1.0,  0.0, 1.0, 0.0, 1.0,
+            .{ .x = -1.0, .y = -1.0, .z = 1.0, .u = 0, .v = 0 },
+            .{ .x = 1.0, .y = -1.0, .z = 1.0, .u = 1.0, .v = 0 },
+            .{ .x = 1.0, .y = 1.0, .z = 1.0, .u = 1.0, .v = 1.0 },
+            .{ .x = -1.0, .y = 1.0, .z = 1.0, .u = 0, .v = 1.0 },
 
-            -1.0, -1.0, -1.0, 0.0, 0.0, 1.0, 1.0,
-            -1.0, 1.0,  -1.0, 0.0, 0.0, 1.0, 1.0,
-            -1.0, 1.0,  1.0,  0.0, 0.0, 1.0, 1.0,
-            -1.0, -1.0, 1.0,  0.0, 0.0, 1.0, 1.0,
+            .{ .x = -1.0, .y = -1.0, .z = -1.0, .u = 0, .v = 0 },
+            .{ .x = -1.0, .y = 1.0, .z = -1.0, .u = 1.0, .v = 0 },
+            .{ .x = -1.0, .y = 1.0, .z = 1.0, .u = 1.0, .v = 1.0 },
+            .{ .x = -1.0, .y = -1.0, .z = 1.0, .u = 0, .v = 1.0 },
 
-            1.0,  -1.0, -1.0, 1.0, 0.5, 0.0, 1.0,
-            1.0,  1.0,  -1.0, 1.0, 0.5, 0.0, 1.0,
-            1.0,  1.0,  1.0,  1.0, 0.5, 0.0, 1.0,
-            1.0,  -1.0, 1.0,  1.0, 0.5, 0.0, 1.0,
+            .{ .x = 1.0, .y = -1.0, .z = -1.0, .u = 0, .v = 0 },
+            .{ .x = 1.0, .y = 1.0, .z = -1.0, .u = 1.0, .v = 0 },
+            .{ .x = 1.0, .y = 1.0, .z = 1.0, .u = 1.0, .v = 1.0 },
+            .{ .x = 1.0, .y = -1.0, .z = 1.0, .u = 0, .v = 1.0 },
 
-            -1.0, -1.0, -1.0, 0.0, 0.5, 1.0, 1.0,
-            -1.0, -1.0, 1.0,  0.0, 0.5, 1.0, 1.0,
-            1.0,  -1.0, 1.0,  0.0, 0.5, 1.0, 1.0,
-            1.0,  -1.0, -1.0, 0.0, 0.5, 1.0, 1.0,
+            .{ .x = -1.0, .y = -1.0, .z = -1.0, .u = 0, .v = 0 },
+            .{ .x = -1.0, .y = -1.0, .z = 1.0, .u = 1.0, .v = 0 },
+            .{ .x = 1.0, .y = -1.0, .z = 1.0, .u = 1.0, .v = 1.0 },
+            .{ .x = 1.0, .y = -1.0, .z = -1.0, .u = 0, .v = 1.0 },
 
-            -1.0, 1.0,  -1.0, 1.0, 0.0, 0.5, 1.0,
-            -1.0, 1.0,  1.0,  1.0, 0.0, 0.5, 1.0,
-            1.0,  1.0,  1.0,  1.0, 0.0, 0.5, 1.0,
-            1.0,  1.0,  -1.0, 1.0, 0.0, 0.5, 1.0,
+            .{ .x = -1.0, .y = 1.0, .z = -1.0, .u = 0, .v = 0 },
+            .{ .x = -1.0, .y = 1.0, .z = 1.0, .u = 1.0, .v = 0 },
+            .{ .x = 1.0, .y = 1.0, .z = 1.0, .u = 1.0, .v = 1.0 },
+            .{ .x = 1.0, .y = 1.0, .z = -1.0, .u = 0, .v = 1.0 },
         }),
     });
 
@@ -74,12 +98,40 @@ export fn init() void {
         }),
     });
 
+    //initialize ztbi
+    zstbi.init(allocator);
+    defer zstbi.deinit();
+
+    var img: Image = Image.loadFromFile("src/dirt.png", 4) catch @panic("failed to load image!");
+    defer img.deinit();
+
+    //need width to be i32, and for it to be clamped within [0, 16384] (16384 was picked as a reasonable max size, maybe overkill though)
+    //const width: i32 = @intCast(@max(0, @min(img.width, 16384)));
+    //const height: i32 = @intCast(@max(0, @min(img.height, 16384)));
+
+    state.bind.views[shd.VIEW_tex] = sg.makeView(.{
+        .texture = .{
+            .image = sg.makeImage(.{
+                .width = 16,
+                .height = 16,
+                .pixel_format = .RGBA8,
+                .data = init: {
+                    var data = sg.ImageData{};
+                    data.mip_levels[0] = sg.asRange(img.data);
+                    break :init data;
+                },
+            }),
+        },
+    });
+
+    state.bind.samplers[shd.SMP_smp] = sg.makeSampler(.{});
+
     state.pip = sg.makePipeline(.{
-        .shader = sg.makeShader(shd.triangleShaderDesc(sg.queryBackend())),
+        .shader = sg.makeShader(shd.texcubeShaderDesc(sg.queryBackend())),
         .layout = init: {
             var l = sg.VertexLayoutState{};
-            l.attrs[shd.ATTR_triangle_position].format = .FLOAT3; //3 coordinates used in position vectors
-            l.attrs[shd.ATTR_triangle_color0].format = .FLOAT4; //4 coordinates used in colour vectors
+            l.attrs[shd.ATTR_texcube_pos].format = .FLOAT3;
+            l.attrs[shd.ATTR_texcube_texcoord0].format = .FLOAT2;
             break :init l;
         },
         .index_type = .UINT16,
@@ -165,7 +217,7 @@ pub fn main() void {
         .frame_cb = frame,
         .cleanup_cb = cleanup,
         .event_cb = event,
-        .window_title = "sokol-zig... but it's a rectangle (spinning :D)!",
+        .window_title = "sokol-zig... but it's a cube (spinning :D)!",
         .width = 800,
         .height = 600,
         .sample_count = 4,
