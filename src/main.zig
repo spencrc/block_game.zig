@@ -206,7 +206,7 @@ pub fn main() void {
         .frame_cb = frame,
         .cleanup_cb = cleanup,
         .event_cb = event,
-        .window_title = "sokol-zig... but it's a cube (spinning :D)!",
+        .window_title = "sokol-zig... but it's a cube chunk!",
         .width = 800,
         .height = 600,
         .sample_count = 4,

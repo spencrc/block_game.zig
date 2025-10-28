@@ -49,7 +49,7 @@ pub fn handle_mouse_movement(self: *Camera, is_mouse_locked: bool, dx: f32, dy: 
     if (!is_mouse_locked)
         return;
 
-    self.yaw -= dx * sens;
+    self.yaw += dx * sens;
     self.pitch -= dy * sens;
     //wrap yap to be in interval [0, 360]
     self.yaw = @mod(self.yaw, 2 * 3.14);
