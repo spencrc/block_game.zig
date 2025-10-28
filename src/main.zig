@@ -24,8 +24,6 @@ var view: sg.View = undefined;
 var sampler: sg.Sampler = undefined;
 var pip: sg.Pipeline = .{};
 var pass_action: sg.PassAction = .{};
-var rx: f32 = 0.0;
-var ry: f32 = 0.0;
 var cam: Camera = Camera.init();
 var chunk: Chunk = undefined;
 
