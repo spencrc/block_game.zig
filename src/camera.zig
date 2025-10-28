@@ -1,8 +1,5 @@
 const Camera = @This();
 
-const std = @import("std");
-const math = std.math;
-const vec2 = @import("math.zig").Vec2;
 const vec3 = @import("math.zig").Vec3;
 const mat4 = @import("math.zig").Mat4;
 
@@ -55,10 +52,10 @@ pub fn handle_mouse_movement(self: *Camera, is_mouse_locked: bool, dx: f32, dy: 
     self.yaw -= dx * sens;
     self.pitch -= dy * sens;
     //wrap yap to be in interval [0, 360]
-    self.yaw = @mod(self.yaw, 2 * math.pi);
+    self.yaw = @mod(self.yaw, 2 * 3.14);
     if (self.yaw < 0) {
-        self.yaw += 2 * math.pi;
+        self.yaw += 2 * 3.14;
     }
     //clamp pitch to be in interval [-90, 90]
-    self.pitch = @max(-math.pi / 2.0, @min(math.pi / 2.0, self.pitch));
+    self.pitch = @max(-3.14 / 2.0, @min(3.14 / 2.0, self.pitch));
 }
