@@ -8,11 +8,12 @@ layout(binding=0) uniform vs_params {
 
 in vec4 pos;
 in vec2 texcoord0;
+in vec4 instance_pos;
 
 out vec2 uv;
 
 void main() {
-    gl_Position = mvp * pos;
+    gl_Position = mvp * (pos + instance_pos);
     uv = texcoord0;
 }
 #pragma sokol @end

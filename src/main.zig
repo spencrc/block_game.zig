@@ -10,19 +10,19 @@ const mat4 = @import("math.zig").Mat4;
 const shd = @import("shaders/texcube.glsl.zig");
 const zstbi = @import("zstbi");
 
+const InstanceData = @import("types.zig").InstanceData;
+const Vertex = @import("types.zig").Vertex;
 const Image = zstbi.Image;
 const Camera = @import("camera.zig");
+const Chunk = @import("chunk.zig");
 
-const state = struct {
-    var bind: sg.Bindings = .{};
-    var pip: sg.Pipeline = .{};
-    var pass_action: sg.PassAction = .{};
-    var rx: f32 = 0.0;
-    var ry: f32 = 0.0;
-    var cam: Camera = Camera.init();
-};
-
-const Vertex = extern struct { x: f32, y: f32, z: f32, u: f32, v: f32 };
+var bind: sg.Bindings = .{};
+var pip: sg.Pipeline = .{};
+var pass_action: sg.PassAction = .{};
+var rx: f32 = 0.0;
+var ry: f32 = 0.0;
+var cam: Camera = Camera.init();
+var chunk: Chunk = undefined;
 
 export fn init() void {
     // initialize sokol-gfx
@@ -51,42 +51,49 @@ export fn init() void {
         _ = debug_allocator.deinit();
     };
 
-    // create vertex buffer with triangle vertices
-    state.bind.vertex_buffers[0] = sg.makeBuffer(.{
+    // create vertex buffer with cube vertices
+    bind.vertex_buffers[0] = sg.makeBuffer(.{
         .data = sg.asRange(&[_]Vertex{
-            .{ .x = -1.0, .y = -1.0, .z = -1.0, .u = 0.0, .v = 0.0 },
-            .{ .x = 1.0, .y = -1.0, .z = -1.0, .u = 1.0, .v = 0.0 },
-            .{ .x = 1.0, .y = 1.0, .z = -1.0, .u = 1.0, .v = 1.0 },
-            .{ .x = -1.0, .y = 1.0, .z = -1.0, .u = 0.0, .v = 1.0 },
+            .{ .x = -0.5, .y = -0.5, .z = -0.5, .u = 0.0, .v = 0.0 },
+            .{ .x = 0.5, .y = -0.5, .z = -0.5, .u = 1.0, .v = 0.0 },
+            .{ .x = 0.5, .y = 0.5, .z = -0.5, .u = 1.0, .v = 1.0 },
+            .{ .x = -0.5, .y = 0.5, .z = -0.5, .u = 0.0, .v = 1.0 },
 
-            .{ .x = -1.0, .y = -1.0, .z = 1.0, .u = 0, .v = 0 },
-            .{ .x = 1.0, .y = -1.0, .z = 1.0, .u = 1.0, .v = 0 },
-            .{ .x = 1.0, .y = 1.0, .z = 1.0, .u = 1.0, .v = 1.0 },
-            .{ .x = -1.0, .y = 1.0, .z = 1.0, .u = 0, .v = 1.0 },
+            .{ .x = -0.5, .y = -0.5, .z = 0.5, .u = 0, .v = 0 },
+            .{ .x = 0.5, .y = -0.5, .z = 0.5, .u = 1.0, .v = 0 },
+            .{ .x = 0.5, .y = 0.5, .z = 0.5, .u = 1.0, .v = 1.0 },
+            .{ .x = -0.5, .y = 0.5, .z = 0.5, .u = 0, .v = 1.0 },
 
-            .{ .x = -1.0, .y = -1.0, .z = -1.0, .u = 0, .v = 0 },
-            .{ .x = -1.0, .y = 1.0, .z = -1.0, .u = 1.0, .v = 0 },
-            .{ .x = -1.0, .y = 1.0, .z = 1.0, .u = 1.0, .v = 1.0 },
-            .{ .x = -1.0, .y = -1.0, .z = 1.0, .u = 0, .v = 1.0 },
+            .{ .x = -0.5, .y = -0.5, .z = -0.5, .u = 0, .v = 0 },
+            .{ .x = -0.5, .y = 0.5, .z = -0.5, .u = 1.0, .v = 0 },
+            .{ .x = -0.5, .y = 0.5, .z = 0.5, .u = 1.0, .v = 1.0 },
+            .{ .x = -0.5, .y = -0.5, .z = 0.5, .u = 0, .v = 1.0 },
 
-            .{ .x = 1.0, .y = -1.0, .z = -1.0, .u = 0, .v = 0 },
-            .{ .x = 1.0, .y = 1.0, .z = -1.0, .u = 1.0, .v = 0 },
-            .{ .x = 1.0, .y = 1.0, .z = 1.0, .u = 1.0, .v = 1.0 },
-            .{ .x = 1.0, .y = -1.0, .z = 1.0, .u = 0, .v = 1.0 },
+            .{ .x = 0.5, .y = -0.5, .z = -0.5, .u = 0, .v = 0 },
+            .{ .x = 0.5, .y = 0.5, .z = -0.5, .u = 1.0, .v = 0 },
+            .{ .x = 0.5, .y = 0.5, .z = 0.5, .u = 1.0, .v = 1.0 },
+            .{ .x = 0.5, .y = -0.5, .z = 0.5, .u = 0, .v = 1.0 },
 
-            .{ .x = -1.0, .y = -1.0, .z = -1.0, .u = 0, .v = 0 },
-            .{ .x = -1.0, .y = -1.0, .z = 1.0, .u = 1.0, .v = 0 },
-            .{ .x = 1.0, .y = -1.0, .z = 1.0, .u = 1.0, .v = 1.0 },
-            .{ .x = 1.0, .y = -1.0, .z = -1.0, .u = 0, .v = 1.0 },
+            .{ .x = -0.5, .y = -0.5, .z = -0.5, .u = 0, .v = 0 },
+            .{ .x = -0.5, .y = -0.5, .z = 0.5, .u = 1.0, .v = 0 },
+            .{ .x = 0.5, .y = -0.5, .z = 0.5, .u = 1.0, .v = 1.0 },
+            .{ .x = 0.5, .y = -0.5, .z = -0.5, .u = 0, .v = 1.0 },
 
-            .{ .x = -1.0, .y = 1.0, .z = -1.0, .u = 0, .v = 0 },
-            .{ .x = -1.0, .y = 1.0, .z = 1.0, .u = 1.0, .v = 0 },
-            .{ .x = 1.0, .y = 1.0, .z = 1.0, .u = 1.0, .v = 1.0 },
-            .{ .x = 1.0, .y = 1.0, .z = -1.0, .u = 0, .v = 1.0 },
+            .{ .x = -0.5, .y = 0.5, .z = -0.5, .u = 0, .v = 0 },
+            .{ .x = -0.5, .y = 0.5, .z = 0.5, .u = 1.0, .v = 0 },
+            .{ .x = 0.5, .y = 0.5, .z = 0.5, .u = 1.0, .v = 1.0 },
+            .{ .x = 0.5, .y = 0.5, .z = -0.5, .u = 0, .v = 1.0 },
         }),
     });
 
-    state.bind.index_buffer = sg.makeBuffer(.{
+    //make the chunk!
+    chunk = Chunk.create();
+
+    bind.vertex_buffers[1] = sg.makeBuffer(.{
+        .data = sg.asRange(&chunk.instances),
+    });
+
+    bind.index_buffer = sg.makeBuffer(.{
         .usage = .{ .index_buffer = true },
         .data = sg.asRange(&[_]u16{
             0,  1,  2,  0,  2,  3,
@@ -109,7 +116,7 @@ export fn init() void {
     //const width: i32 = @intCast(@max(0, @min(img.width, 16384)));
     //const height: i32 = @intCast(@max(0, @min(img.height, 16384)));
 
-    state.bind.views[shd.VIEW_tex] = sg.makeView(.{
+    bind.views[shd.VIEW_tex] = sg.makeView(.{
         .texture = .{
             .image = sg.makeImage(.{
                 .width = 16,
@@ -124,14 +131,22 @@ export fn init() void {
         },
     });
 
-    state.bind.samplers[shd.SMP_smp] = sg.makeSampler(.{});
+    bind.samplers[shd.SMP_smp] = sg.makeSampler(.{});
 
-    state.pip = sg.makePipeline(.{
+    pip = sg.makePipeline(.{
         .shader = sg.makeShader(shd.texcubeShaderDesc(sg.queryBackend())),
         .layout = init: {
             var l = sg.VertexLayoutState{};
-            l.attrs[shd.ATTR_texcube_pos].format = .FLOAT3;
-            l.attrs[shd.ATTR_texcube_texcoord0].format = .FLOAT2;
+
+            l.buffers[0].stride = @sizeOf(Vertex);
+            l.buffers[0].step_func = .PER_VERTEX;
+            l.attrs[shd.ATTR_texcube_pos] = .{ .format = .FLOAT3, .buffer_index = 0 };
+            l.attrs[shd.ATTR_texcube_texcoord0] = .{ .format = .FLOAT2, .buffer_index = 0 };
+
+            l.buffers[1].stride = @sizeOf(InstanceData);
+            l.buffers[1].step_func = .PER_INSTANCE;
+            l.attrs[shd.ATTR_texcube_instance_pos] = .{ .format = .FLOAT3, .buffer_index = 1 };
+
             break :init l;
         },
         .index_type = .UINT16,
@@ -142,39 +157,34 @@ export fn init() void {
         .cull_mode = .BACK,
     });
 
-    state.pass_action.colors[0] = .{
+    pass_action.colors[0] = .{
         .load_action = .CLEAR,
         .clear_value = .{ .r = 0.25, .g = 0.5, .b = 0.75, .a = 1 },
     };
 }
 
+var frame_count: f32 = 0;
+var time_elapsed: f32 = 0.0;
 export fn frame() void {
     const dt: f32 = @floatCast(sapp.frameDuration() * 60);
 
     if (!sapp.mouseLocked()) {
-        state.cam.input = vec3.zero();
+        cam.input = vec3.zero();
     }
-    state.cam.update_camera(dt);
-    state.cam.update_matricies(sapp.widthf(), sapp.heightf());
+    cam.update_camera(dt);
+    cam.update_matricies(sapp.widthf(), sapp.heightf());
 
-    const view_proj = mat4.mul(state.cam.proj, state.cam.view);
+    const view_proj = mat4.mul(cam.proj, cam.view);
 
-    state.rx += 1.0 * dt;
-    state.ry += 1.0 * dt;
-
-    const rxm = mat4.rotate(state.rx, .{ .x = 1, .y = 0, .z = 0 });
-    const rym = mat4.rotate(state.ry, .{ .x = 0, .y = 1, .z = 0 });
-    const rm = mat4.mul(rxm, rym);
-
-    sg.beginPass(.{ .action = state.pass_action, .swapchain = sglue.swapchain() });
-    sg.applyPipeline(state.pip);
-    sg.applyBindings(state.bind);
-    sg.applyUniforms(0, sg.asRange(&shd.VsParams{
-        .mvp = mat4.mul(view_proj, rm),
-    }));
-    sg.draw(0, 36, 1);
+    sg.beginPass(.{ .action = pass_action, .swapchain = sglue.swapchain() });
+    sg.applyPipeline(pip);
+    sg.applyBindings(bind);
+    sg.applyUniforms(0, sg.asRange(&shd.VsParams{ .mvp = view_proj }));
+    sg.draw(0, 36, chunk.count);
     sg.endPass();
     sg.commit();
+
+    std.debug.print("FPS: {d}\n", .{1.0 / sapp.frameDuration()});
 }
 
 export fn cleanup() void {
@@ -189,22 +199,22 @@ export fn event(ev: [*c]const sapp.Event) void {
         if (ev.*.mouse_button == .RIGHT)
             sapp.lockMouse(false);
     } else if (ev.*.type == .MOUSE_MOVE) {
-        state.cam.handle_mouse_movement(sapp.mouseLocked(), ev.*.mouse_dx, ev.*.mouse_dy);
+        cam.handle_mouse_movement(sapp.mouseLocked(), ev.*.mouse_dx, ev.*.mouse_dy);
     } else if (ev.*.type == .KEY_DOWN) {
         switch (ev.*.key_code) {
-            .D => state.cam.input.x = 1,
-            .A => state.cam.input.x = -1,
-            .W => state.cam.input.y = 1,
-            .S => state.cam.input.y = -1,
+            .D => cam.input.x = 1,
+            .A => cam.input.x = -1,
+            .W => cam.input.y = 1,
+            .S => cam.input.y = -1,
 
             else => {},
         }
     } else if (ev.*.type == .KEY_UP) {
         switch (ev.*.key_code) {
-            .D => state.cam.input.x = 0,
-            .A => state.cam.input.x = 0,
-            .W => state.cam.input.y = 0,
-            .S => state.cam.input.y = 0,
+            .D => cam.input.x = 0,
+            .A => cam.input.x = 0,
+            .W => cam.input.y = 0,
+            .S => cam.input.y = 0,
 
             else => {},
         }
