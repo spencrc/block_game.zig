@@ -9,14 +9,19 @@ const vec3 = @import("math.zig").Vec3;
 const mat4 = @import("math.zig").Mat4;
 const shd = @import("shaders/chunk.glsl.zig");
 const zstbi = @import("zstbi");
+const constants = @import("constants.zig");
 
-const InstanceData = @import("types.zig").InstanceData;
-const Vertex = @import("types.zig").Vertex;
+const InstanceData = constants.InstanceData;
+const Vertex = constants.Vertex;
 const Image = zstbi.Image;
 const Camera = @import("camera.zig");
 const Chunk = @import("chunk.zig");
 
-var bind: sg.Bindings = .{};
+var vertex_buffer: sg.Buffer = undefined;
+var instance_buffer: sg.Buffer = undefined;
+var index_buffer: sg.Buffer = undefined;
+var view: sg.View = undefined;
+var sampler: sg.Sampler = undefined;
 var pip: sg.Pipeline = .{};
 var pass_action: sg.PassAction = .{};
 var rx: f32 = 0.0;
@@ -52,57 +57,23 @@ export fn init() void {
     };
 
     // create vertex buffer with cube vertices
-    bind.vertex_buffers[0] = sg.makeBuffer(.{
-        .data = sg.asRange(&[_]Vertex{
-            .{ .x = -0.5, .y = -0.5, .z = -0.5, .u = 0.0, .v = 0.0 },
-            .{ .x = 0.5, .y = -0.5, .z = -0.5, .u = 1.0, .v = 0.0 },
-            .{ .x = 0.5, .y = 0.5, .z = -0.5, .u = 1.0, .v = 1.0 },
-            .{ .x = -0.5, .y = 0.5, .z = -0.5, .u = 0.0, .v = 1.0 },
-
-            .{ .x = -0.5, .y = -0.5, .z = 0.5, .u = 0, .v = 0 },
-            .{ .x = 0.5, .y = -0.5, .z = 0.5, .u = 1.0, .v = 0 },
-            .{ .x = 0.5, .y = 0.5, .z = 0.5, .u = 1.0, .v = 1.0 },
-            .{ .x = -0.5, .y = 0.5, .z = 0.5, .u = 0, .v = 1.0 },
-
-            .{ .x = -0.5, .y = -0.5, .z = -0.5, .u = 0, .v = 0 },
-            .{ .x = -0.5, .y = 0.5, .z = -0.5, .u = 1.0, .v = 0 },
-            .{ .x = -0.5, .y = 0.5, .z = 0.5, .u = 1.0, .v = 1.0 },
-            .{ .x = -0.5, .y = -0.5, .z = 0.5, .u = 0, .v = 1.0 },
-
-            .{ .x = 0.5, .y = -0.5, .z = -0.5, .u = 0, .v = 0 },
-            .{ .x = 0.5, .y = 0.5, .z = -0.5, .u = 1.0, .v = 0 },
-            .{ .x = 0.5, .y = 0.5, .z = 0.5, .u = 1.0, .v = 1.0 },
-            .{ .x = 0.5, .y = -0.5, .z = 0.5, .u = 0, .v = 1.0 },
-
-            .{ .x = -0.5, .y = -0.5, .z = -0.5, .u = 0, .v = 0 },
-            .{ .x = -0.5, .y = -0.5, .z = 0.5, .u = 1.0, .v = 0 },
-            .{ .x = 0.5, .y = -0.5, .z = 0.5, .u = 1.0, .v = 1.0 },
-            .{ .x = 0.5, .y = -0.5, .z = -0.5, .u = 0, .v = 1.0 },
-
-            .{ .x = -0.5, .y = 0.5, .z = -0.5, .u = 0, .v = 0 },
-            .{ .x = -0.5, .y = 0.5, .z = 0.5, .u = 1.0, .v = 0 },
-            .{ .x = 0.5, .y = 0.5, .z = 0.5, .u = 1.0, .v = 1.0 },
-            .{ .x = 0.5, .y = 0.5, .z = -0.5, .u = 0, .v = 1.0 },
-        }),
+    //TODO: move vertices to be a global somewhere. it will never change
+    vertex_buffer = sg.makeBuffer(.{
+        .data = sg.asRange(&constants.vertices),
     });
 
     //make the chunk!
     chunk = Chunk.create();
 
-    bind.vertex_buffers[1] = sg.makeBuffer(.{
-        .data = sg.asRange(&chunk.instances),
-    });
+    //TODO: make instance buffer be per chunk, and then set the binds in the frame loop so we can render multiple different chunks
+    // instance_buffer = sg.makeBuffer(.{
+    //     .data = sg.asRange(&chunk.instances),
+    // });
 
-    bind.index_buffer = sg.makeBuffer(.{
+    //TODO: make index buffer a global somewhere, as it will never change.
+    index_buffer = sg.makeBuffer(.{
         .usage = .{ .index_buffer = true },
-        .data = sg.asRange(&[_]u16{
-            0,  1,  2,  0,  2,  3,
-            6,  5,  4,  7,  6,  4,
-            8,  9,  10, 8,  10, 11,
-            14, 13, 12, 15, 14, 12,
-            16, 17, 18, 16, 18, 19,
-            22, 21, 20, 23, 22, 20,
-        }),
+        .data = sg.asRange(&constants.indices),
     });
 
     //initialize ztbi
@@ -116,7 +87,8 @@ export fn init() void {
     //const width: i32 = @intCast(@max(0, @min(img.width, 16384)));
     //const height: i32 = @intCast(@max(0, @min(img.height, 16384)));
 
-    bind.views[shd.VIEW_tex] = sg.makeView(.{
+    //TODO: make views a global somewhere and transition to using a texture atlas. current implementation only supports one texture (which is bad)
+    view = sg.makeView(.{
         .texture = .{
             .image = sg.makeImage(.{
                 .width = 16,
@@ -131,7 +103,8 @@ export fn init() void {
         },
     });
 
-    bind.samplers[shd.SMP_smp] = sg.makeSampler(.{});
+    //TODO: make samplers a global somewhere!
+    sampler = sg.makeSampler(.{});
 
     pip = sg.makePipeline(.{
         .shader = sg.makeShader(shd.chunkShaderDesc(sg.queryBackend())),
@@ -178,6 +151,14 @@ export fn frame() void {
 
     sg.beginPass(.{ .action = pass_action, .swapchain = sglue.swapchain() });
     sg.applyPipeline(pip);
+
+    var bind: sg.Bindings = .{};
+    bind.vertex_buffers[0] = vertex_buffer;
+    bind.vertex_buffers[1] = chunk.instance_buffer;
+    bind.index_buffer = index_buffer;
+    bind.views[shd.VIEW_tex] = view;
+    bind.samplers[shd.SMP_smp] = sampler;
+
     sg.applyBindings(bind);
     sg.applyUniforms(0, sg.asRange(&shd.VsParams{ .mvp = view_proj }));
     sg.draw(0, 36, chunk.count);

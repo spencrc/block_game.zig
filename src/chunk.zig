@@ -1,13 +1,14 @@
 const Chunk = @This();
 
-const InstanceData = @import("types.zig").InstanceData;
-const Vertex = @import("types.zig").Vertex;
-const vec3 = @import("math.zig").Vec3;
+const sokol = @import("sokol");
+const sg = sokol.gfx;
+
+const InstanceData = @import("constants.zig").InstanceData;
 
 const CHUNK_SIZE = 16;
 const MAX_CUBES_PER_CHUNK = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
-instances: [MAX_CUBES_PER_CHUNK]InstanceData,
+instance_buffer: sg.Buffer,
 count: u32,
 
 pub fn create() Chunk {
@@ -24,7 +25,9 @@ pub fn create() Chunk {
     }
 
     return .{
-        .instances = instances,
+        .instance_buffer = sg.makeBuffer(.{
+            .data = sg.asRange(&instances),
+        }),
         .count = count,
     };
 }
