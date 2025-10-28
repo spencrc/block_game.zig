@@ -7,7 +7,7 @@ const sapp = sokol.app;
 const sglue = sokol.glue;
 const vec3 = @import("math.zig").Vec3;
 const mat4 = @import("math.zig").Mat4;
-const shd = @import("shaders/texcube.glsl.zig");
+const shd = @import("shaders/chunk.glsl.zig");
 const zstbi = @import("zstbi");
 
 const InstanceData = @import("types.zig").InstanceData;
@@ -134,18 +134,18 @@ export fn init() void {
     bind.samplers[shd.SMP_smp] = sg.makeSampler(.{});
 
     pip = sg.makePipeline(.{
-        .shader = sg.makeShader(shd.texcubeShaderDesc(sg.queryBackend())),
+        .shader = sg.makeShader(shd.chunkShaderDesc(sg.queryBackend())),
         .layout = init: {
             var l = sg.VertexLayoutState{};
 
             l.buffers[0].stride = @sizeOf(Vertex);
             l.buffers[0].step_func = .PER_VERTEX;
-            l.attrs[shd.ATTR_texcube_pos] = .{ .format = .FLOAT3, .buffer_index = 0 };
-            l.attrs[shd.ATTR_texcube_texcoord0] = .{ .format = .FLOAT2, .buffer_index = 0 };
+            l.attrs[shd.ATTR_chunk_pos] = .{ .format = .FLOAT3, .buffer_index = 0 };
+            l.attrs[shd.ATTR_chunk_texcoord0] = .{ .format = .FLOAT2, .buffer_index = 0 };
 
             l.buffers[1].stride = @sizeOf(InstanceData);
             l.buffers[1].step_func = .PER_INSTANCE;
-            l.attrs[shd.ATTR_texcube_instance_pos] = .{ .format = .FLOAT3, .buffer_index = 1 };
+            l.attrs[shd.ATTR_chunk_instance_pos] = .{ .format = .FLOAT3, .buffer_index = 1 };
 
             break :init l;
         },

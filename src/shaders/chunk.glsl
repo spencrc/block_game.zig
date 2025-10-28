@@ -30,4 +30,4 @@ void main() {
 }
 #pragma sokol @end
 
-#pragma sokol @program texcube vs fs
+#pragma sokol @program chunk vs fs

@@ -71,8 +71,8 @@ pub fn build(b: *std.Build) void {
     // call shdc.createSourceFile() helper function, this returns a `!*Build.Step`:
     const shdc_step: *std.Build.Step = shdc.createSourceFile(b, .{
         .shdc_dep = dep_shdc,
-        .input = "src/shaders/texcube.glsl",
-        .output = "src/shaders/texcube.glsl.zig",
+        .input = "src/shaders/chunk.glsl",
+        .output = "src/shaders/chunk.glsl.zig",
         .slang = .{
             .glsl410 = true,
             .glsl300es = true,
