@@ -3,10 +3,10 @@ const Camera = @This();
 const vec3 = @import("math.zig").Vec3;
 const mat4 = @import("math.zig").Mat4;
 
-const STARTING_POSITION: vec3 = vec3{ .x = 0.0, .y = 0.0, .z = 5.0 };
+const STARTING_POSITION: vec3 = vec3{ .x = 0.0, .y = 0.0, .z = -2.0 };
 
 position: vec3 = STARTING_POSITION,
-yaw: f32 = 0,
+yaw: f32 = 3.14,
 pitch: f32 = 0,
 input: vec3 = vec3.zero(),
 target: vec3 = vec3.zero(),
