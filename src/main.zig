@@ -11,8 +11,6 @@ const shd = @import("shaders/chunk.glsl.zig");
 const zstbi = @import("zstbi");
 const constants = @import("constants.zig");
 
-const InstanceData = constants.InstanceData;
-const Vertex = constants.Vertex;
 const Image = zstbi.Image;
 const Camera = @import("camera.zig");
 const Chunk = @import("chunk.zig");
@@ -54,25 +52,14 @@ export fn init() void {
         _ = debug_allocator.deinit();
     };
 
-    // create vertex buffer with cube vertices
-    //TODO: move vertices to be a global somewhere. it will never change
-    vertex_buffer = sg.makeBuffer(.{
-        .data = sg.asRange(&constants.vertices),
-    });
-
     //make the chunk!
     chunk = Chunk.create();
+    chunk.greedy_mesh();
 
     //TODO: make instance buffer be per chunk, and then set the binds in the frame loop so we can render multiple different chunks
     // instance_buffer = sg.makeBuffer(.{
     //     .data = sg.asRange(&chunk.instances),
     // });
-
-    //TODO: make index buffer a global somewhere, as it will never change.
-    index_buffer = sg.makeBuffer(.{
-        .usage = .{ .index_buffer = true },
-        .data = sg.asRange(&constants.indices),
-    });
 
     //initialize ztbi
     zstbi.init(allocator);
@@ -109,14 +96,13 @@ export fn init() void {
         .layout = init: {
             var l = sg.VertexLayoutState{};
 
-            l.buffers[0].stride = @sizeOf(Vertex);
             l.buffers[0].step_func = .PER_VERTEX;
             l.attrs[shd.ATTR_chunk_pos] = .{ .format = .FLOAT3, .buffer_index = 0 };
             l.attrs[shd.ATTR_chunk_texcoord0] = .{ .format = .FLOAT2, .buffer_index = 0 };
 
-            l.buffers[1].stride = @sizeOf(InstanceData);
-            l.buffers[1].step_func = .PER_INSTANCE;
-            l.attrs[shd.ATTR_chunk_instance_pos] = .{ .format = .FLOAT3, .buffer_index = 1 };
+            // l.buffers[1].stride = @sizeOf(InstanceData);
+            // l.buffers[1].step_func = .PER_INSTANCE;
+            // l.attrs[shd.ATTR_chunk_instance_pos] = .{ .format = .FLOAT3, .buffer_index = 1 };
 
             break :init l;
         },
@@ -151,19 +137,21 @@ export fn frame() void {
     sg.applyPipeline(pip);
 
     var bind: sg.Bindings = .{};
-    bind.vertex_buffers[0] = vertex_buffer;
-    bind.vertex_buffers[1] = chunk.instance_buffer;
-    bind.index_buffer = index_buffer;
+    bind.vertex_buffers[0] = chunk.vertex_buffer;
+    //bind.vertex_buffers[1] = chunk.instance_buffer;
+    bind.index_buffer = chunk.index_buffer;
     bind.views[shd.VIEW_tex] = view;
     bind.samplers[shd.SMP_smp] = sampler;
 
     sg.applyBindings(bind);
-    sg.applyUniforms(0, sg.asRange(&shd.VsParams{ .mvp = view_proj }));
-    sg.draw(0, 36, chunk.count);
+    sg.applyUniforms(0, sg.asRange(&shd.VsParams{
+        .mvp = view_proj,
+    }));
+    sg.draw(0, chunk.index_count, 1);
     sg.endPass();
     sg.commit();
 
-    std.debug.print("FPS: {d}\n", .{1.0 / sapp.frameDuration()});
+    //std.debug.print("FPS: {d}\n", .{1.0 / sapp.frameDuration()});
 }
 
 export fn cleanup() void {
