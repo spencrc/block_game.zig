@@ -123,7 +123,7 @@ export fn init() void {
 var frame_count: f32 = 0;
 var time_elapsed: f32 = 0.0;
 export fn frame() void {
-    const dt: f32 = @floatCast(sapp.frameDuration() * 60);
+    const dt: f32 = @floatCast(sapp.frameDuration());
 
     if (!sapp.mouseLocked()) {
         cam.input = vec3.zero();
@@ -151,7 +151,14 @@ export fn frame() void {
     sg.endPass();
     sg.commit();
 
-    //std.debug.print("FPS: {d}\n", .{1.0 / sapp.frameDuration()});
+    time_elapsed += dt;
+    frame_count += 1.0;
+    if (time_elapsed >= 1) {
+        const fps = frame_count / time_elapsed;
+        std.debug.print("FPS: {d}\n", .{fps});
+        time_elapsed = 0.0;
+        frame_count = 0.0;
+    }
 }
 
 export fn cleanup() void {
@@ -197,7 +204,6 @@ pub fn main() void {
         .window_title = "sokol-zig... but it's a cube chunk!",
         .width = 800,
         .height = 600,
-        .sample_count = 4,
         .icon = .{ .sokol_default = true },
         .logger = .{ .func = slog.func },
     });

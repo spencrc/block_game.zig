@@ -17,7 +17,7 @@ pub fn init() Camera {
     return .{};
 }
 
-const speed = 0.5;
+const speed = 7;
 pub fn update_camera(self: *Camera, dt: f32) void {
     const multiplier = speed * dt;
 
