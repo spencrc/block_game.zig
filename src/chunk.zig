@@ -10,11 +10,9 @@ const CHUNK_SIZE = @import("constants.zig").CHUNK_SIZE;
 const MAX_CUBES_PER_CHUNK = @import("constants.zig").MAX_CUBES_PER_CHUNK;
 
 blocks: [CHUNK_SIZE][CHUNK_SIZE][CHUNK_SIZE]bool,
-vertex_buffer: sg.Buffer = undefined,
-index_buffer: sg.Buffer = undefined,
-
+ssbo_view: sg.View = undefined,
+storage_buffer: sg.Buffer = undefined,
 vertex_count: u32 = 0,
-index_count: u32 = 0,
 
 pub fn create() Chunk {
     var blocks: [CHUNK_SIZE][CHUNK_SIZE][CHUNK_SIZE]bool = undefined;
@@ -36,10 +34,8 @@ pub fn create() Chunk {
 //Greedy mesher algorithm implementation in Zig. Works to generate a mesh for a chunk with minimals vertices for performance.
 //Please see here for where the code originates, as it's not my own: https://gist.github.com/Vercidium/a3002bd083cce2bc854c9ff8f0118d33#file-greedyvoxelmeshing-L19
 pub fn greedy_mesh(self: *Chunk) void {
-    var indices: [6 * 6 * MAX_CUBES_PER_CHUNK]u16 = undefined;
-    var vertices: [6 * 4 * MAX_CUBES_PER_CHUNK]Vertex = undefined;
+    var vertices: [6 * 6 * MAX_CUBES_PER_CHUNK]Vertex = undefined;
     var vertex_count: u16 = 0;
-    var index_count: u16 = 0;
 
     for (0..3) |d| {
         const u = (d + 1) % 3;
@@ -119,31 +115,31 @@ pub fn greedy_mesh(self: *Chunk) void {
                         var dv: [3]isize = .{ 0, 0, 0 };
                         dv[v] = @intCast(h);
 
-                        //Build the vertices for the quad
-                        vertices[vertex_count + 0] = create_vertex(x[0], x[1], x[2], 0.0, 0.0); //TOP LEFT
-                        vertices[vertex_count + 1] = create_vertex(x[0] + du[0], x[1] + du[1], x[2] + du[2], 1.0, 0.0); //BOTTOM LEFT
-                        vertices[vertex_count + 2] = create_vertex(x[0] + du[0] + dv[0], x[1] + du[1] + dv[1], x[2] + du[2] + dv[2], 1.0, 1.0); //TOP RIGHT
-                        vertices[vertex_count + 3] = create_vertex(x[0] + dv[0], x[1] + dv[1], x[2] + dv[2], 0.0, 1.0); //BOTTOM RIGHT
-
-                        //Build the indices for the quad (to, you know, actually render the quad)
+                        //Create the vertices for the quad (to, you know, actually render the quad)
+                        const bottom_right = create_vertex(x[0] + du[0] + dv[0], x[1] + du[1] + dv[1], x[2] + du[2] + dv[2], 1.0, 1.0);
+                        const top_right = create_vertex(x[0] + du[0], x[1] + du[1], x[2] + du[2], 1.0, 0.0);
+                        const top_left = create_vertex(x[0], x[1], x[2], 0.0, 0.0);
+                        const bottom_left = create_vertex(x[0] + dv[0], x[1] + dv[1], x[2] + dv[2], 0.0, 1.0);
+                        //Now we need to append 6 vertices, as we use vertex pulling and need to form 2 triangles to form a quad.
                         if (!flip[n]) { //Not flip means we don't want to be flip the normal!
-                            indices[index_count + 0] = vertex_count + 2;
-                            indices[index_count + 1] = vertex_count + 1;
-                            indices[index_count + 2] = vertex_count;
-                            indices[index_count + 3] = vertex_count + 3;
-                            indices[index_count + 4] = vertex_count + 2;
-                            indices[index_count + 5] = vertex_count;
+                            vertices[vertex_count + 0] = bottom_right;
+                            vertices[vertex_count + 1] = top_right;
+                            vertices[vertex_count + 2] = top_left;
+
+                            vertices[vertex_count + 3] = bottom_left;
+                            vertices[vertex_count + 4] = bottom_right;
+                            vertices[vertex_count + 5] = top_left;
                         } else { //Here we want to flip the normal!
-                            indices[index_count + 0] = vertex_count;
-                            indices[index_count + 1] = vertex_count + 1;
-                            indices[index_count + 2] = vertex_count + 2;
-                            indices[index_count + 3] = vertex_count + 0;
-                            indices[index_count + 4] = vertex_count + 2;
-                            indices[index_count + 5] = vertex_count + 3;
+                            vertices[vertex_count + 0] = top_left;
+                            vertices[vertex_count + 1] = top_right;
+                            vertices[vertex_count + 2] = bottom_right;
+
+                            vertices[vertex_count + 3] = top_left;
+                            vertices[vertex_count + 4] = bottom_right;
+                            vertices[vertex_count + 5] = bottom_left;
                         }
                         //Done messing with vertices/quad, so increment!
-                        index_count += 6;
-                        vertex_count += 4;
+                        vertex_count += 6;
 
                         for (0..h) |l| {
                             for (0..w) |k| {
@@ -161,15 +157,17 @@ pub fn greedy_mesh(self: *Chunk) void {
             }
         }
     }
-    self.vertex_buffer = sg.makeBuffer(.{
+    self.storage_buffer = sg.makeBuffer(.{
         .data = sg.asRange(&vertices),
+        .usage = .{ .storage_buffer = true },
     });
-    self.index_buffer = sg.makeBuffer(.{
-        .data = sg.asRange(&indices),
-        .usage = .{ .index_buffer = true },
+    self.ssbo_view = sg.makeView(.{
+        .storage_buffer = .{
+            .buffer = self.storage_buffer,
+        },
     });
-    self.index_count = index_count;
     self.vertex_count = vertex_count;
+    std.debug.print("v: {d}\n", .{vertex_count});
 }
 
 fn is_block_at(self: *Chunk, x: isize, y: isize, z: isize) bool {

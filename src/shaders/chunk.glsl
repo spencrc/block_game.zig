@@ -1,25 +1,34 @@
-#pragma sokol @header const m = @import("../math.zig")
-#pragma sokol @ctype mat4 m.Mat4
+@header const m = @import("../math.zig")
+@ctype mat4 m.Mat4
 
-#pragma sokol @vs vs
+@vs vs
 layout(binding=0) uniform vs_params {
     mat4 mvp;
 };
 
-in vec4 pos;
-in vec2 texcoord0;
+struct sb_vertex {
+    float x;
+    float y;
+    float z;
+    float u;
+    float v;
+};
+
+layout(binding=0) readonly buffer ssbo {
+    sb_vertex vtx[];
+};
 
 out vec2 uv;
 
 void main() {
-    gl_Position = mvp * (pos);
-    uv = texcoord0 * 16.0;
+    gl_Position = mvp * vec4(vtx[gl_VertexIndex].x, vtx[gl_VertexIndex].y, vtx[gl_VertexIndex].z,  1.0);
+    uv = vec2(vtx[gl_VertexIndex].u, vtx[gl_VertexIndex].v) * 16.0;
 }
-#pragma sokol @end
+@end
 
-#pragma sokol @fs fs
-layout(binding=0) uniform texture2D tex;
-layout(binding=0) uniform sampler smp;
+@fs fs
+layout(binding=1) uniform texture2D tex;
+layout(binding=1) uniform sampler smp;
 
 in vec2 uv;
 out vec4 frag_color;
@@ -27,6 +36,6 @@ out vec4 frag_color;
 void main() {
     frag_color = texture(sampler2D(tex, smp), uv);
 }
-#pragma sokol @end
+@end
 
-#pragma sokol @program chunk vs fs
+@program chunk vs fs

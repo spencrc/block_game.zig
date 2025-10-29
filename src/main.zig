@@ -56,21 +56,12 @@ export fn init() void {
     chunk = Chunk.create();
     chunk.greedy_mesh();
 
-    //TODO: make instance buffer be per chunk, and then set the binds in the frame loop so we can render multiple different chunks
-    // instance_buffer = sg.makeBuffer(.{
-    //     .data = sg.asRange(&chunk.instances),
-    // });
-
     //initialize ztbi
     zstbi.init(allocator);
     defer zstbi.deinit();
 
     var img: Image = Image.loadFromFile("src/dirt.png", 4) catch @panic("failed to load image!");
     defer img.deinit();
-
-    //need width to be i32, and for it to be clamped within [0, 16384] (16384 was picked as a reasonable max size, maybe overkill though)
-    //const width: i32 = @intCast(@max(0, @min(img.width, 16384)));
-    //const height: i32 = @intCast(@max(0, @min(img.height, 16384)));
 
     //TODO: make views a global somewhere and transition to using a texture atlas. current implementation only supports one texture (which is bad)
     view = sg.makeView(.{
@@ -93,20 +84,6 @@ export fn init() void {
 
     pip = sg.makePipeline(.{
         .shader = sg.makeShader(shd.chunkShaderDesc(sg.queryBackend())),
-        .layout = init: {
-            var l = sg.VertexLayoutState{};
-
-            l.buffers[0].step_func = .PER_VERTEX;
-            l.attrs[shd.ATTR_chunk_pos] = .{ .format = .FLOAT3, .buffer_index = 0 };
-            l.attrs[shd.ATTR_chunk_texcoord0] = .{ .format = .FLOAT2, .buffer_index = 0 };
-
-            // l.buffers[1].stride = @sizeOf(InstanceData);
-            // l.buffers[1].step_func = .PER_INSTANCE;
-            // l.attrs[shd.ATTR_chunk_instance_pos] = .{ .format = .FLOAT3, .buffer_index = 1 };
-
-            break :init l;
-        },
-        .index_type = .UINT16,
         .depth = .{
             .compare = .LESS_EQUAL,
             .write_enabled = true,
@@ -137,17 +114,15 @@ export fn frame() void {
     sg.applyPipeline(pip);
 
     var bind: sg.Bindings = .{};
-    bind.vertex_buffers[0] = chunk.vertex_buffer;
-    //bind.vertex_buffers[1] = chunk.instance_buffer;
-    bind.index_buffer = chunk.index_buffer;
     bind.views[shd.VIEW_tex] = view;
+    bind.views[shd.VIEW_ssbo] = chunk.ssbo_view; //includes vertices via ssbo
     bind.samplers[shd.SMP_smp] = sampler;
 
     sg.applyBindings(bind);
-    sg.applyUniforms(0, sg.asRange(&shd.VsParams{
+    sg.applyUniforms(shd.UB_vs_params, sg.asRange(&shd.VsParams{
         .mvp = view_proj,
     }));
-    sg.draw(0, chunk.index_count, 1);
+    sg.draw(0, chunk.vertex_count, 1);
     sg.endPass();
     sg.commit();
 
