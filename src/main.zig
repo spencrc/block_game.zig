@@ -13,7 +13,8 @@ const constants = @import("constants.zig");
 
 const Image = zstbi.Image;
 const Camera = @import("camera.zig");
-const Chunk = @import("chunk.zig");
+const World = @import("world/world.zig");
+const Chunk = @import("world/chunk.zig");
 
 var vertex_buffer: sg.Buffer = undefined;
 var instance_buffer: sg.Buffer = undefined;
@@ -23,7 +24,21 @@ var sampler: sg.Sampler = undefined;
 var pip: sg.Pipeline = .{};
 var pass_action: sg.PassAction = .{};
 var cam: Camera = Camera.init();
-var chunk: Chunk = undefined;
+var world: World = undefined;
+
+var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
+const allocator: std.mem.Allocator = allocator: {
+    break :allocator switch (builtin.mode) {
+        .Debug, .ReleaseSafe => debug_allocator.allocator(),
+        .ReleaseFast, .ReleaseSmall => std.heap.smp_allocator,
+    };
+};
+const is_debug: bool = allocator: {
+    break :allocator switch (builtin.mode) {
+        .Debug, .ReleaseSafe => true,
+        .ReleaseFast, .ReleaseSmall => false,
+    };
+};
 
 export fn init() void {
     // initialize sokol-gfx
@@ -32,29 +47,15 @@ export fn init() void {
         .logger = .{ .func = slog.func },
     });
 
-    //initialize appropiate allocator (TODO: move this to somewhere better T-T)
-    var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
-    const allocator: std.mem.Allocator = allocator: {
-        if (builtin.os.tag == .wasi) break :allocator std.heap.wasm_allocator;
-        break :allocator switch (builtin.mode) {
-            .Debug, .ReleaseSafe => debug_allocator.allocator(),
-            .ReleaseFast, .ReleaseSmall => std.heap.smp_allocator,
-        };
-    };
-    const is_debug: bool = allocator: {
-        if (builtin.os.tag == .wasi) break :allocator false;
-        break :allocator switch (builtin.mode) {
-            .Debug, .ReleaseSafe => true,
-            .ReleaseFast, .ReleaseSmall => false,
-        };
-    };
-    defer if (is_debug) {
-        _ = debug_allocator.deinit();
-    };
-
     //make the chunk!
-    chunk = Chunk.create();
-    chunk.greedy_mesh(allocator);
+    world = World.init(allocator);
+    //TODO: there is a hard cap on number of chunks due to buffer pool being finite. need to change how buffers work. looking into sg_buffer_append
+    for (0..8) |i| {
+        for (0..8) |j| {
+            const chunk = world.generate_chunk(@intCast(i), 0, @intCast(j)) catch @panic("chunk generation fail!");
+            chunk.greedy_mesh(allocator);
+        }
+    }
 
     //initialize ztbi
     zstbi.init(allocator);
@@ -115,14 +116,28 @@ export fn frame() void {
 
     var bind: sg.Bindings = .{};
     bind.views[shd.VIEW_tex] = view;
-    bind.views[shd.VIEW_ssbo] = chunk.ssbo_view; //includes vertices via ssbo
     bind.samplers[shd.SMP_smp] = sampler;
 
-    sg.applyBindings(bind);
-    sg.applyUniforms(shd.UB_vs_params, sg.asRange(&shd.VsParams{
-        .mvp = view_proj,
-    }));
-    sg.draw(0, chunk.vertex_count, 1);
+    //TODO: there is a hard cap on number of chunks due to buffer pool being finite. need to change how buffers work. looking into sg_buffer_append
+    for (0..8) |i| {
+        for (0..8) |j| {
+            const chunk = world.get_chunk(@intCast(i), 0, @intCast(j));
+            if (chunk == null)
+                continue;
+            bind.views[shd.VIEW_ssbo] = chunk.?.ssbo_view; //includes vertices via ssbo
+            sg.applyBindings(bind);
+            sg.applyUniforms(shd.UB_vs_params, sg.asRange(&shd.VsParams{
+                .mvp = view_proj,
+                .chunk_pos = .{
+                    @floatFromInt(chunk.?.pos[0] * constants.CHUNK_SIZE),
+                    @floatFromInt(chunk.?.pos[1] * constants.CHUNK_SIZE),
+                    @floatFromInt(chunk.?.pos[2] * constants.CHUNK_SIZE),
+                    1.0,
+                },
+            }));
+            sg.draw(0, chunk.?.vertex_count, 1);
+        }
+    }
     sg.endPass();
     sg.commit();
 
@@ -138,6 +153,9 @@ export fn frame() void {
 
 export fn cleanup() void {
     sg.shutdown();
+    world.deinit();
+    if (is_debug)
+        _ = debug_allocator.deinit();
 }
 
 export fn event(ev: [*c]const sapp.Event) void {

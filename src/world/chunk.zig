@@ -6,15 +6,16 @@ const sg = sokol.gfx;
 
 const Vertex = extern struct { x: f32, y: f32, z: f32, u: f32, v: f32 };
 
-const CHUNK_SIZE = @import("constants.zig").CHUNK_SIZE;
-const MAX_CUBES_PER_CHUNK = @import("constants.zig").MAX_CUBES_PER_CHUNK;
+const CHUNK_SIZE = @import("../constants.zig").CHUNK_SIZE;
+const MAX_CUBES_PER_CHUNK = @import("../constants.zig").MAX_CUBES_PER_CHUNK;
 
+pos: [3]i32,
 blocks: [CHUNK_SIZE][CHUNK_SIZE][CHUNK_SIZE]bool,
 ssbo_view: sg.View = undefined,
 storage_buffer: sg.Buffer = undefined,
 vertex_count: u32 = 0,
 
-pub fn create() Chunk {
+pub fn init(x: i32, y: i32, z: i32) Chunk {
     var blocks: [CHUNK_SIZE][CHUNK_SIZE][CHUNK_SIZE]bool = undefined;
 
     for (0..CHUNK_SIZE) |cx| {
@@ -26,6 +27,7 @@ pub fn create() Chunk {
     }
 
     return .{
+        .pos = .{ x, y, z },
         .blocks = blocks,
     };
 }
