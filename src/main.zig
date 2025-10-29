@@ -54,13 +54,13 @@ export fn init() void {
 
     //make the chunk!
     chunk = Chunk.create();
-    chunk.greedy_mesh();
+    chunk.greedy_mesh(allocator);
 
     //initialize ztbi
     zstbi.init(allocator);
     defer zstbi.deinit();
 
-    var img: Image = Image.loadFromFile("src/dirt.png", 4) catch @panic("failed to load image!");
+    var img: Image = Image.loadFromFile("textures/dirt.png", 4) catch @panic("failed to load image!");
     defer img.deinit();
 
     //TODO: make views a global somewhere and transition to using a texture atlas. current implementation only supports one texture (which is bad)
