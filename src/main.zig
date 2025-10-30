@@ -13,19 +13,14 @@ const constants = @import("constants.zig");
 
 const Image = zstbi.Image;
 const Camera = @import("camera.zig");
-const World = @import("world/world.zig");
-const Chunk = @import("world/chunk.zig");
+const World = @import("worldgen/world.zig");
 
-var vertex_buffer: sg.Buffer = undefined;
-var instance_buffer: sg.Buffer = undefined;
-var index_buffer: sg.Buffer = undefined;
 var view: sg.View = undefined;
 var sampler: sg.Sampler = undefined;
 var pip: sg.Pipeline = .{};
 var pass_action: sg.PassAction = .{};
 var cam: Camera = Camera.init();
 var world: World = undefined;
-
 var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
 const allocator: std.mem.Allocator = allocator: {
     break :allocator switch (builtin.mode) {
@@ -40,18 +35,22 @@ const is_debug: bool = allocator: {
     };
 };
 
+const RENDER_DISTANCE_LIMIT = constants.RENDER_DISTANCE_LIMIT;
+const CHUNK_SIZE = constants.CHUNK_SIZE;
+
 export fn init() void {
     // initialize sokol-gfx
     sg.setup(.{
+        .buffer_pool_size = RENDER_DISTANCE_LIMIT * RENDER_DISTANCE_LIMIT,
+        .view_pool_size = RENDER_DISTANCE_LIMIT * RENDER_DISTANCE_LIMIT + 1,
         .environment = sglue.environment(),
         .logger = .{ .func = slog.func },
     });
 
-    //make the chunk!
+    //make the world!
     world = World.init(allocator);
-    //TODO: there is a hard cap on number of chunks due to buffer pool being finite. need to change how buffers work. looking into sg_buffer_append
-    for (0..8) |i| {
-        for (0..8) |j| {
+    for (0..RENDER_DISTANCE_LIMIT) |i| {
+        for (0..RENDER_DISTANCE_LIMIT) |j| {
             const chunk = world.generate_chunk(@intCast(i), 0, @intCast(j)) catch @panic("chunk generation fail!");
             chunk.greedy_mesh(allocator);
         }
@@ -119,8 +118,8 @@ export fn frame() void {
     bind.samplers[shd.SMP_smp] = sampler;
 
     //TODO: there is a hard cap on number of chunks due to buffer pool being finite. need to change how buffers work. looking into sg_buffer_append
-    for (0..8) |i| {
-        for (0..8) |j| {
+    for (0..RENDER_DISTANCE_LIMIT) |i| {
+        for (0..RENDER_DISTANCE_LIMIT) |j| {
             const chunk = world.get_chunk(@intCast(i), 0, @intCast(j));
             if (chunk == null)
                 continue;
@@ -129,9 +128,9 @@ export fn frame() void {
             sg.applyUniforms(shd.UB_vs_params, sg.asRange(&shd.VsParams{
                 .mvp = view_proj,
                 .chunk_pos = .{
-                    @floatFromInt(chunk.?.pos[0] * constants.CHUNK_SIZE),
-                    @floatFromInt(chunk.?.pos[1] * constants.CHUNK_SIZE),
-                    @floatFromInt(chunk.?.pos[2] * constants.CHUNK_SIZE),
+                    @floatFromInt(chunk.?.pos[0] * CHUNK_SIZE),
+                    @floatFromInt(chunk.?.pos[1] * CHUNK_SIZE),
+                    @floatFromInt(chunk.?.pos[2] * CHUNK_SIZE),
                     1.0,
                 },
             }));

@@ -3,16 +3,24 @@ const Chunk = @This();
 const std = @import("std");
 const sokol = @import("sokol");
 const sg = sokol.gfx;
+const simplex = @import("noise.zig");
 
-const Vertex = extern struct { x: f32, y: f32, z: f32, u: f32, v: f32 };
+const Vertex = extern struct {
+    x: f32,
+    y: f32,
+    z: f32,
+    u: f32,
+    v: f32,
+    width: u32,
+    height: u32,
+};
 
 const CHUNK_SIZE = @import("../constants.zig").CHUNK_SIZE;
 const MAX_CUBES_PER_CHUNK = @import("../constants.zig").MAX_CUBES_PER_CHUNK;
 
 pos: [3]i32,
 blocks: [CHUNK_SIZE][CHUNK_SIZE][CHUNK_SIZE]bool,
-ssbo_view: sg.View = undefined,
-storage_buffer: sg.Buffer = undefined,
+ssbo_view: sg.View = undefined, //if unitialized like this, it takes up just 4 bytes
 vertex_count: u32 = 0,
 
 pub fn init(x: i32, y: i32, z: i32) Chunk {
@@ -21,7 +29,10 @@ pub fn init(x: i32, y: i32, z: i32) Chunk {
     for (0..CHUNK_SIZE) |cx| {
         for (0..CHUNK_SIZE) |cy| {
             for (0..CHUNK_SIZE) |cz| {
-                blocks[cx][cy][cz] = true;
+                const noise = simplex.noise(@floatFromInt(cx), @floatFromInt(cy), @floatFromInt(cz));
+                if (noise < 0.1) {
+                    blocks[cx][cy][cz] = false;
+                } else blocks[cx][cy][cz] = true;
             }
         }
     }
@@ -82,8 +93,8 @@ pub fn greedy_mesh(self: *Chunk, allocator: std.mem.Allocator) void {
                 var i: usize = 0;
                 while (i < CHUNK_SIZE) {
                     if (mask[mask_index]) {
-                        var width: usize = 1;
-                        var height: usize = 1;
+                        var width: u32 = 1;
+                        var height: u32 = 1;
                         // Compute the width of this quad and store it in width
                         //   This is done by searching along the current axis until mask[mask_index + width] is false
                         while (i + width < CHUNK_SIZE and mask[mask_index + width] and (flip[mask_index] == flip[mask_index + width])) : (width += 1) {}
@@ -118,10 +129,10 @@ pub fn greedy_mesh(self: *Chunk, allocator: std.mem.Allocator) void {
                         dv[v] = @intCast(height);
 
                         //Create the vertices for the quad (to, you know, actually render the quad)
-                        const bottom_right = create_vertex(pos[0] + du[0] + dv[0], pos[1] + du[1] + dv[1], pos[2] + du[2] + dv[2], 1.0, 1.0);
-                        const top_right = create_vertex(pos[0] + du[0], pos[1] + du[1], pos[2] + du[2], 1.0, 0.0);
-                        const top_left = create_vertex(pos[0], pos[1], pos[2], 0.0, 0.0);
-                        const bottom_left = create_vertex(pos[0] + dv[0], pos[1] + dv[1], pos[2] + dv[2], 0.0, 1.0);
+                        const bottom_right = create_vertex(pos[0] + du[0] + dv[0], pos[1] + du[1] + dv[1], pos[2] + du[2] + dv[2], 1.0, 1.0, width, height);
+                        const top_right = create_vertex(pos[0] + du[0], pos[1] + du[1], pos[2] + du[2], 1.0, 0.0, width, height);
+                        const top_left = create_vertex(pos[0], pos[1], pos[2], 0.0, 0.0, width, height);
+                        const bottom_left = create_vertex(pos[0] + dv[0], pos[1] + dv[1], pos[2] + dv[2], 0.0, 1.0, width, height);
 
                         const quad: [6]Vertex = if (!flip[mask_index]) .{
                             bottom_right, top_right,    top_left,
@@ -151,13 +162,13 @@ pub fn greedy_mesh(self: *Chunk, allocator: std.mem.Allocator) void {
             }
         }
     }
-    self.storage_buffer = sg.makeBuffer(.{
+    const storage_buffer = sg.makeBuffer(.{
         .data = sg.asRange(vertices_list.items),
         .usage = .{ .storage_buffer = true },
     });
     self.ssbo_view = sg.makeView(.{
         .storage_buffer = .{
-            .buffer = self.storage_buffer,
+            .buffer = storage_buffer,
         },
     });
     self.vertex_count = @intCast(vertices_list.items.len);
@@ -170,6 +181,6 @@ fn is_block_at(self: *Chunk, x: isize, y: isize, z: isize) bool {
     return self.blocks[x_usize][y_usize][z_usize] == true;
 }
 
-fn create_vertex(x: isize, y: isize, z: isize, u: f32, v: f32) Vertex {
-    return Vertex{ .x = @floatFromInt(x), .y = @floatFromInt(y), .z = @floatFromInt(z), .u = u, .v = v };
+fn create_vertex(x: isize, y: isize, z: isize, u: f32, v: f32, width: u32, height: u32) Vertex {
+    return Vertex{ .x = @floatFromInt(x), .y = @floatFromInt(y), .z = @floatFromInt(z), .u = u, .v = v, .width = width, .height = height };
 }

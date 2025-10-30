@@ -13,6 +13,8 @@ struct sb_vertex {
     float z;
     float u;
     float v;
+    int width;
+    int height;
 };
 
 layout(binding=0) readonly buffer ssbo {
@@ -24,7 +26,7 @@ out vec2 uv;
 void main() {
     vec4 base_pos = vec4(vtx[gl_VertexIndex].x, vtx[gl_VertexIndex].y, vtx[gl_VertexIndex].z,  1.0);
     gl_Position = mvp * (base_pos + chunk_pos);
-    uv = vec2(vtx[gl_VertexIndex].u, vtx[gl_VertexIndex].v);
+    uv = vec2(vtx[gl_VertexIndex].u * vtx[gl_VertexIndex].width, vtx[gl_VertexIndex].v * vtx[gl_VertexIndex].height);
 }
 @end
 
