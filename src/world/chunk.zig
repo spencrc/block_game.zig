@@ -161,7 +161,6 @@ pub fn greedy_mesh(self: *Chunk, allocator: std.mem.Allocator) void {
         },
     });
     self.vertex_count = @intCast(vertices_list.items.len);
-    std.debug.print("v: {d}\n", .{self.vertex_count});
 }
 
 fn is_block_at(self: *Chunk, x: isize, y: isize, z: isize) bool {
