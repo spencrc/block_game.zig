@@ -27,11 +27,10 @@ pos: [3]i32,
 blocks: [CHUNK_SIZE][CHUNK_SIZE][CHUNK_SIZE]Block,
 all_air: bool,
 world: *World,
-neighbours: [6]?*Chunk,
 ssbo_view: sg.View = undefined, //if unitialized like this, it takes up just 4 bytes
 vertex_count: u32 = 0,
 
-pub fn init(cx: i32, cy: i32, cz: i32, world: *World, neighbours: [6]?*Chunk) Chunk {
+pub fn init(cx: i32, cy: i32, cz: i32, world: *World) Chunk {
     var blocks: [CHUNK_SIZE][CHUNK_SIZE][CHUNK_SIZE]Block = undefined;
     var all_air = true;
 
@@ -52,7 +51,6 @@ pub fn init(cx: i32, cy: i32, cz: i32, world: *World, neighbours: [6]?*Chunk) Ch
         .all_air = all_air,
         .blocks = blocks,
         .world = world,
-        .neighbours = neighbours,
     };
 }
 
@@ -96,7 +94,7 @@ fn determine_block_type(y: i32, cy: i32, height: i32) Material {
 
 //Greedy mesher algorithm implementation in Zig. Works to generate a mesh for a chunk with minimals vertices for performance.
 //Please see here for where the code originates, as it's not my own: https://gist.github.com/Vercidium/a3002bd083cce2bc854c9ff8f0118d33#file-greedyvoxelmeshing-L19
-pub fn greedy_mesh(self: *Chunk, allocator: std.mem.Allocator) void {
+pub fn greedy_mesh(self: *Chunk, allocator: std.mem.Allocator, neighbours: [6]?*Chunk) void {
     var vertices_list = std.ArrayList(Vertex).empty;
     defer vertices_list.deinit(allocator);
 
@@ -125,12 +123,12 @@ pub fn greedy_mesh(self: *Chunk, allocator: std.mem.Allocator) void {
                     const blockCurrent: Material = if (pos[d] >= 0)
                         self.get_block(pos[0], pos[1], pos[2])
                     else
-                        self.get_block_from_neighbours(pos[0], pos[1], pos[2]);
+                        self.get_block_from_neighbours(pos[0], pos[1], pos[2], neighbours);
                     //self.world.get_block(pos[0] + self.pos[0] * CHUNK_SIZE, pos[1] + self.pos[1] * CHUNK_SIZE, pos[2] + self.pos[2] * CHUNK_SIZE);
                     const blockCompare: Material = if (pos[d] < CHUNK_SIZE - 1)
                         self.get_block(pos[0] + q[0], pos[1] + q[1], pos[2] + q[2])
                     else
-                        self.get_block_from_neighbours(pos[0] + q[0], pos[1] + q[1], pos[2] + q[2]);
+                        self.get_block_from_neighbours(pos[0] + q[0], pos[1] + q[1], pos[2] + q[2], neighbours);
                     //self.world.get_block(pos[0] + self.pos[0] * CHUNK_SIZE, pos[1] + self.pos[1] * CHUNK_SIZE, pos[2] + self.pos[2] * CHUNK_SIZE);
 
                     // The mask is set to the block type if there is a visible face between two blocks,
@@ -252,12 +250,12 @@ pub fn get_block(self: *Chunk, x: i32, y: i32, z: i32) Material {
 }
 
 //TODO: currently segfaults due to pointer being lost from hashmap resizing. needs to be fixed asap as it means generating meshes causes a crash
-fn get_block_from_neighbours(self: *Chunk, x: i32, y: i32, z: i32) Material {
+fn get_block_from_neighbours(self: *Chunk, x: i32, y: i32, z: i32, neighbours: [6]?*Chunk) Material {
     const wx = x + self.pos[0] * CHUNK_SIZE;
     const wy = y + self.pos[1] * CHUNK_SIZE;
     const wz = z + self.pos[2] * CHUNK_SIZE;
 
-    for (self.neighbours) |n| {
+    for (neighbours) |n| {
         if (n == null)
             continue;
         const x_relative_to_n = wx - n.?.pos[0] * CHUNK_SIZE;
@@ -268,9 +266,6 @@ fn get_block_from_neighbours(self: *Chunk, x: i32, y: i32, z: i32) Material {
             0 <= y_relative_to_n and y_relative_to_n < CHUNK_SIZE and
             0 <= z_relative_to_n and z_relative_to_n < CHUNK_SIZE)
         {
-            std.debug.print("{d}\n", .{x_relative_to_n});
-            std.debug.print("{d}\n", .{y_relative_to_n});
-            std.debug.print("{d}\n", .{z_relative_to_n});
             return n.?.get_block(x_relative_to_n, y_relative_to_n, z_relative_to_n);
         }
     }

@@ -14,6 +14,7 @@ const constants = @import("constants.zig");
 const Image = zstbi.Image;
 const Camera = @import("camera.zig");
 const World = @import("worldgen/world.zig");
+const Chunk = @import("worldgen/chunk.zig");
 
 var view: sg.View = undefined;
 var sampler: sg.Sampler = undefined;
@@ -50,20 +51,38 @@ export fn init() void {
     //make the world!
     world = World.init(allocator);
 
+    var chunks: std.ArrayList(*Chunk) = .empty;
+    defer chunks.deinit(allocator);
     var total_time: u64 = 0;
     var n: f64 = 0.0;
     for (0..RENDER_DISTANCE_LIMIT) |i| {
         for (0..RENDER_DISTANCE_LIMIT) |j| {
             for (0..5) |k| {
                 const chunk = world.generate_chunk(@intCast(i), @intCast(k), @intCast(j)) catch @panic("chunk generation fail!");
-                if (chunk.all_air)
-                    continue;
-                var timer = std.time.Timer.start() catch @panic("timer failed!");
-                chunk.greedy_mesh(allocator);
-                total_time += timer.read();
-                n += 1.0;
+                chunks.append(allocator, chunk) catch @panic("fuck");
             }
         }
+    }
+    std.debug.print("hey\n", .{});
+    for (chunks.items) |chunk| {
+        std.debug.print("hey\n", .{});
+        if (chunk.all_air)
+            continue;
+        const x = chunk.pos[0];
+        const y = chunk.pos[1];
+        const z = chunk.pos[2];
+        const neighbours: [6]?*Chunk = .{
+            world.get_chunk(x - 1, y, z),
+            world.get_chunk(x, y - 1, z),
+            world.get_chunk(x, y, z - 1),
+            world.get_chunk(x + 1, y, z),
+            world.get_chunk(x, y + 1, z),
+            world.get_chunk(x, y, z + 1),
+        };
+        var timer = std.time.Timer.start() catch @panic("timer failed!");
+        chunk.greedy_mesh(allocator, neighbours);
+        total_time += timer.read();
+        n += 1.0;
     }
     std.debug.print("total time taken: {d} ms\n", .{@as(f64, @floatFromInt(total_time)) / 1_000_000});
     std.debug.print("average time taken: {d} ms\n", .{@as(f64, @floatFromInt(total_time)) / 1_000_000 / n});
