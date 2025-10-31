@@ -41,38 +41,79 @@ const CHUNK_SIZE = constants.CHUNK_SIZE;
 export fn init() void {
     // initialize sokol-gfx
     sg.setup(.{
-        .buffer_pool_size = RENDER_DISTANCE_LIMIT * RENDER_DISTANCE_LIMIT,
-        .view_pool_size = RENDER_DISTANCE_LIMIT * RENDER_DISTANCE_LIMIT + 1,
+        .buffer_pool_size = RENDER_DISTANCE_LIMIT * RENDER_DISTANCE_LIMIT * 5,
+        .view_pool_size = RENDER_DISTANCE_LIMIT * RENDER_DISTANCE_LIMIT * 5 + 1,
         .environment = sglue.environment(),
         .logger = .{ .func = slog.func },
     });
 
     //make the world!
     world = World.init(allocator);
+
+    var total_time: u64 = 0;
+    var n: f64 = 0.0;
     for (0..RENDER_DISTANCE_LIMIT) |i| {
         for (0..RENDER_DISTANCE_LIMIT) |j| {
-            const chunk = world.generate_chunk(@intCast(i), 0, @intCast(j)) catch @panic("chunk generation fail!");
-            chunk.greedy_mesh(allocator);
+            for (0..5) |k| {
+                const chunk = world.generate_chunk(@intCast(i), @intCast(k), @intCast(j)) catch @panic("chunk generation fail!");
+                if (chunk.all_air)
+                    continue;
+                var timer = std.time.Timer.start() catch @panic("timer failed!");
+                chunk.greedy_mesh(allocator);
+                total_time += timer.read();
+                n += 1.0;
+            }
         }
     }
+    std.debug.print("total time taken: {d} ms\n", .{@as(f64, @floatFromInt(total_time)) / 1_000_000});
+    std.debug.print("average time taken: {d} ms\n", .{@as(f64, @floatFromInt(total_time)) / 1_000_000 / n});
 
     //initialize ztbi
     zstbi.init(allocator);
     defer zstbi.deinit();
 
-    var img: Image = Image.loadFromFile("textures/dirt.png", 4) catch @panic("failed to load image!");
-    defer img.deinit();
+    var default_img: Image = Image.loadFromFile("textures/default.png", 4) catch @panic("failed to load image!");
+    defer default_img.deinit();
+    var dirt_img: Image = Image.loadFromFile("textures/dirt.png", 4) catch @panic("failed to load image!");
+    defer dirt_img.deinit();
+    var cobble_img: Image = Image.loadFromFile("textures/cobblestone.png", 4) catch @panic("failed to load image!");
+    defer cobble_img.deinit();
+    var water_img: Image = Image.loadFromFile("textures/water.png", 4) catch @panic("failed to load image!");
+    defer water_img.deinit();
+    var grass_img: Image = Image.loadFromFile("textures/grass.png", 4) catch @panic("failed to load image!");
+    defer grass_img.deinit();
+    var sand_img: Image = Image.loadFromFile("textures/sand.png", 4) catch @panic("failed to load image!");
+    defer sand_img.deinit();
+    var snow_img: Image = Image.loadFromFile("textures/snow.png", 4) catch @panic("failed to load image!");
+    defer snow_img.deinit();
+
+    const pixels: [7][16][16][4]u8 = blk: {
+        var pixels: [7][16][16][4]u8 = undefined;
+
+        // Copy image (1024 bytes = 16*16*4)
+        @memcpy(@as([*]u8, @ptrCast(&pixels[0]))[0..1024], default_img.data);
+        @memcpy(@as([*]u8, @ptrCast(&pixels[1]))[0..1024], dirt_img.data);
+        @memcpy(@as([*]u8, @ptrCast(&pixels[2]))[0..1024], cobble_img.data);
+        @memcpy(@as([*]u8, @ptrCast(&pixels[3]))[0..1024], water_img.data);
+        @memcpy(@as([*]u8, @ptrCast(&pixels[4]))[0..1024], grass_img.data);
+        @memcpy(@as([*]u8, @ptrCast(&pixels[5]))[0..1024], sand_img.data);
+        @memcpy(@as([*]u8, @ptrCast(&pixels[6]))[0..1024], snow_img.data);
+
+        break :blk pixels;
+    };
 
     //TODO: make views a global somewhere and transition to using a texture atlas. current implementation only supports one texture (which is bad)
     view = sg.makeView(.{
         .texture = .{
             .image = sg.makeImage(.{
+                .type = .ARRAY,
                 .width = 16,
                 .height = 16,
+                .num_slices = 7,
                 .pixel_format = .RGBA8,
                 .data = init: {
                     var data = sg.ImageData{};
-                    data.mip_levels[0] = sg.asRange(img.data);
+                    data.mip_levels[0] = sg.asRange(&pixels);
                     break :init data;
                 },
             }),
@@ -120,21 +161,23 @@ export fn frame() void {
     //TODO: there is a hard cap on number of chunks due to buffer pool being finite. need to change how buffers work. looking into sg_buffer_append
     for (0..RENDER_DISTANCE_LIMIT) |i| {
         for (0..RENDER_DISTANCE_LIMIT) |j| {
-            const chunk = world.get_chunk(@intCast(i), 0, @intCast(j));
-            if (chunk == null)
-                continue;
-            bind.views[shd.VIEW_ssbo] = chunk.?.ssbo_view; //includes vertices via ssbo
-            sg.applyBindings(bind);
-            sg.applyUniforms(shd.UB_vs_params, sg.asRange(&shd.VsParams{
-                .mvp = view_proj,
-                .chunk_pos = .{
-                    @floatFromInt(chunk.?.pos[0] * CHUNK_SIZE),
-                    @floatFromInt(chunk.?.pos[1] * CHUNK_SIZE),
-                    @floatFromInt(chunk.?.pos[2] * CHUNK_SIZE),
-                    1.0,
-                },
-            }));
-            sg.draw(0, chunk.?.vertex_count, 1);
+            for (0..5) |k| {
+                const chunk = world.get_chunk(@intCast(i), @intCast(k), @intCast(j));
+                if (chunk.?.all_air)
+                    continue;
+                bind.views[shd.VIEW_ssbo] = chunk.?.ssbo_view; //includes vertices via ssbo
+                sg.applyBindings(bind);
+                sg.applyUniforms(shd.UB_vs_params, sg.asRange(&shd.VsParams{
+                    .mvp = view_proj,
+                    .chunk_pos = .{
+                        @floatFromInt(chunk.?.pos[0] * CHUNK_SIZE),
+                        @floatFromInt(chunk.?.pos[1] * CHUNK_SIZE),
+                        @floatFromInt(chunk.?.pos[2] * CHUNK_SIZE),
+                        1.0,
+                    },
+                }));
+                sg.draw(0, chunk.?.vertex_count, 1);
+            }
         }
     }
     sg.endPass();
