@@ -251,6 +251,7 @@ pub fn get_block(self: *Chunk, x: i32, y: i32, z: i32) Material {
     return self.blocks[x_usize][y_usize][z_usize].material;
 }
 
+//TODO: currently segfaults due to pointer being lost from hashmap resizing. needs to be fixed asap as it means generating meshes causes a crash
 fn get_block_from_neighbours(self: *Chunk, x: i32, y: i32, z: i32) Material {
     const wx = x + self.pos[0] * CHUNK_SIZE;
     const wy = y + self.pos[1] * CHUNK_SIZE;
