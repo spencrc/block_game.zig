@@ -4,7 +4,7 @@
 @vs vs
 layout(binding=0) uniform vs_params {
     mat4 mvp;
-    vec4 chunk_pos;
+    vec3 chunk_pos;
 };
 
 struct sb_vertex {
@@ -25,8 +25,9 @@ layout(binding=0) readonly buffer ssbo {
 out vec3 uv;
 
 void main() {
-    vec4 base_pos = vec4(vtx[gl_VertexIndex].x, vtx[gl_VertexIndex].y, vtx[gl_VertexIndex].z,  1.0);
-    gl_Position = mvp * (base_pos + chunk_pos);
+    vec3 base_pos = vec3(vtx[gl_VertexIndex].x, vtx[gl_VertexIndex].y, vtx[gl_VertexIndex].z);
+    vec3 world_pos = base_pos + chunk_pos;
+    gl_Position = mvp * vec4(world_pos, 1.0);
     vec2 texcoord0 = vec2(vtx[gl_VertexIndex].u * vtx[gl_VertexIndex].width, vtx[gl_VertexIndex].v * vtx[gl_VertexIndex].height);
     uv = vec3(texcoord0, float(vtx[gl_VertexIndex].tex_id));
 }
