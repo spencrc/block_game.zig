@@ -3,7 +3,8 @@ const Camera = @This();
 const vec3 = @import("math.zig").Vec3;
 const mat4 = @import("math.zig").Mat4;
 
-const STARTING_POSITION: vec3 = vec3{ .x = 50.0, .y = 40.0, .z = 50.0 };
+const STARTING_POSITION: vec3 = vec3{ .x = 50.0, .y = 80.0, .z = 50.0 };
+const FAR = 290;
 
 position: vec3 = STARTING_POSITION,
 yaw: f32 = 3.14,
@@ -11,7 +12,7 @@ pitch: f32 = 0,
 input: vec3 = vec3.zero(),
 target: vec3 = vec3.zero(),
 proj: mat4 = mat4.lookat(STARTING_POSITION, vec3.zero(), vec3.up()),
-view: mat4 = mat4.persp(90.0, 1, 0.1, 500),
+view: mat4 = mat4.persp(90.0, 1, 0.1, FAR),
 
 pub fn init() Camera {
     return .{};
@@ -40,7 +41,7 @@ pub fn update_camera(self: *Camera, dt: f32) void {
 }
 
 pub fn update_matricies(self: *Camera, width: f32, height: f32) void {
-    self.proj = mat4.persp(90.0, width / height, 0.1, 500);
+    self.proj = mat4.persp(90.0, width / height, 0.1, FAR);
     self.view = mat4.lookat(self.position, self.target, vec3.up());
 }
 
