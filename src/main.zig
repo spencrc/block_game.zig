@@ -52,118 +52,28 @@ export fn init() void {
     zstbi.init(allocator);
     defer zstbi.deinit();
 
-    const default_name = "textures/default.png";
-    const dirt_name = "textures/dirt.png";
-    const cobble_name = "textures/cobblestone.png";
-    const water_name = "textures/water.png";
-    const grass_name = "textures/grass.png";
-    const sand_name = "textures/sand.png";
-    const snow_name = "textures/snow.png";
-
-    var default: [5]Image = undefined;
-    generate_images(default_name, &default) catch @panic("shit");
-    var dirt: [5]Image = undefined;
-    generate_images(dirt_name, &dirt) catch @panic("shit");
-    var cobble: [5]Image = undefined;
-    generate_images(cobble_name, &cobble) catch @panic("shit");
-    var water: [5]Image = undefined;
-    generate_images(water_name, &water) catch @panic("shit");
-    var grass: [5]Image = undefined;
-    generate_images(grass_name, &grass) catch @panic("shit");
-    var sand: [5]Image = undefined;
-    generate_images(sand_name, &sand) catch @panic("shit");
-    var snow: [5]Image = undefined;
-    generate_images(snow_name, &snow) catch @panic("shit");
-
-    // var default_img: Image = Image.loadFromFile("textures/default.png", 4) catch @panic("failed to load image!");
-    // defer default_img.deinit();
-    // var dirt_img: Image = Image.loadFromFile("textures/dirt.png", 4) catch @panic("failed to load image!");
-    // defer dirt_img.deinit();
-    // var cobble_img: Image = Image.loadFromFile("textures/cobblestone.png", 4) catch @panic("failed to load image!");
-    // defer cobble_img.deinit();
-    // var water_img: Image = Image.loadFromFile("textures/water.png", 4) catch @panic("failed to load image!");
-    // defer water_img.deinit();
-    // var grass_img: Image = Image.loadFromFile("textures/grass.png", 4) catch @panic("failed to load image!");
-    // defer grass_img.deinit();
-    // var sand_img: Image = Image.loadFromFile("textures/sand.png", 4) catch @panic("failed to load image!");
-    // defer sand_img.deinit();
-    // var snow_img: Image = Image.loadFromFile("textures/snow.png", 4) catch @panic("failed to load image!");
-    //defer snow_img.deinit();
-
-    const mip0: [7][16][16][4]u8 = blk: {
-        var pixels: [7][16][16][4]u8 = undefined;
-
-        // Copy image (1024 bytes = 16*16*4)
-        @memcpy(@as([*]u8, @ptrCast(&pixels[0]))[0..1024], default[0].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[1]))[0..1024], dirt[0].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[2]))[0..1024], cobble[0].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[3]))[0..1024], water[0].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[4]))[0..1024], grass[0].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[5]))[0..1024], sand[0].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[6]))[0..1024], snow[0].data);
-
-        break :blk pixels;
+    const texture_names = [_][:0]const u8{
+        "textures/default.png",
+        "textures/dirt.png",
+        "textures/cobblestone.png",
+        "textures/water.png",
+        "textures/grass.png",
+        "textures/sand.png",
+        "textures/snow.png",
     };
+    var textures: [7][5]Image = undefined;
+    defer for (&textures) |*t|
+        for (t) |*i|
+            i.deinit();
+    for (texture_names, 0..) |name, i| {
+        generate_images(name, &textures[i]) catch @panic("texture load failed");
+    }
 
-    const mip1: [7][8][8][4]u8 = blk: {
-        var pixels: [7][8][8][4]u8 = undefined;
-
-        // Copy image (1024 bytes = 16*16*4)
-        @memcpy(@as([*]u8, @ptrCast(&pixels[0]))[0..256], default[1].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[1]))[0..256], dirt[1].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[2]))[0..256], cobble[1].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[3]))[0..256], water[1].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[4]))[0..256], grass[1].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[5]))[0..256], sand[1].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[6]))[0..256], snow[1].data);
-
-        break :blk pixels;
-    };
-
-    const mip2: [7][4][4][4]u8 = blk: {
-        var pixels: [7][4][4][4]u8 = undefined;
-
-        // Copy image (1024 bytes = 16*16*4)
-        @memcpy(@as([*]u8, @ptrCast(&pixels[0]))[0..64], default[2].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[1]))[0..64], dirt[2].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[2]))[0..64], cobble[2].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[3]))[0..64], water[2].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[4]))[0..64], grass[2].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[5]))[0..64], sand[2].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[6]))[0..64], snow[2].data);
-
-        break :blk pixels;
-    };
-
-    const mip3: [7][2][2][4]u8 = blk: {
-        var pixels: [7][2][2][4]u8 = undefined;
-
-        // Copy image (1024 bytes = 16*16*4)
-        @memcpy(@as([*]u8, @ptrCast(&pixels[0]))[0..16], default[3].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[1]))[0..16], dirt[3].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[2]))[0..16], cobble[3].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[3]))[0..16], water[3].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[4]))[0..16], grass[3].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[5]))[0..16], sand[3].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[6]))[0..16], snow[3].data);
-
-        break :blk pixels;
-    };
-
-    const mip4: [7][1][1][4]u8 = blk: {
-        var pixels: [7][1][1][4]u8 = undefined;
-
-        // Copy image (1024 bytes = 16*16*4)
-        @memcpy(@as([*]u8, @ptrCast(&pixels[0]))[0..4], default[4].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[1]))[0..4], dirt[4].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[2]))[0..4], cobble[4].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[3]))[0..4], water[4].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[4]))[0..4], grass[4].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[5]))[0..4], sand[4].data);
-        @memcpy(@as([*]u8, @ptrCast(&pixels[6]))[0..4], snow[4].data);
-
-        break :blk pixels;
-    };
+    const mip0: [7][16][16][4]u8 = fill_mip(16, 16, 0, textures);
+    const mip1: [7][8][8][4]u8 = fill_mip(8, 8, 1, textures);
+    const mip2: [7][4][4][4]u8 = fill_mip(4, 4, 2, textures);
+    const mip3: [7][2][2][4]u8 = fill_mip(2, 2, 3, textures);
+    const mip4: [7][1][1][4]u8 = fill_mip(1, 1, 4, textures);
 
     //TODO: make views a global somewhere and transition to using a texture atlas. current implementation only supports one texture (which is bad)
     view = sg.makeView(.{
@@ -188,16 +98,12 @@ export fn init() void {
         },
     });
 
-    for (&default) |*e| e.deinit();
-    for (&cobble) |*e| e.deinit();
-    for (&dirt) |*e| e.deinit();
-    for (&water) |*e| e.deinit();
-    for (&grass) |*e| e.deinit();
-    for (&sand) |*e| e.deinit();
-    for (&snow) |*e| e.deinit();
-
     //TODO: make samplers a global somewhere!
-    sampler = sg.makeSampler(.{});
+    sampler = sg.makeSampler(.{
+        .min_filter = .LINEAR,
+        .mag_filter = .LINEAR,
+        .mipmap_filter = .LINEAR,
+    });
 
     pip = sg.makePipeline(.{
         .shader = sg.makeShader(shd.chunkShaderDesc(sg.queryBackend())),
@@ -270,6 +176,16 @@ fn generate_images(name: [:0]const u8, arr: *[5]Image) !void {
 
         arr[i] = arr[i - 1].resize(w, h);
     }
+}
+
+fn fill_mip(comptime w: usize, comptime h: usize, level: usize, textures: [7][5]Image) [7][w][h][4]u8 {
+    var pixels: [7][w][h][4]u8 = undefined;
+
+    for (0..7) |i| {
+        @memcpy(@as([*]u8, @ptrCast(&pixels[i]))[0 .. w * h * 4], textures[i][level].data);
+    }
+
+    return pixels;
 }
 
 var frame_count: f32 = 0;
