@@ -41,7 +41,21 @@ in vec3 uv;
 out vec4 frag_color;
 
 void main() {
-    frag_color = texture(sampler2DArray(tex, smp), uv);
+    vec2 dudx = dFdx(uv.xy);
+    vec2 dudy = dFdy(uv.xy);
+
+    float rho = max(
+        length(dudx) * 16,
+        length(dudy) * 16
+    );
+
+    float mip = max(log2(rho), 0.0);
+    float levelsize = 16 / exp2(mip);
+    vec2 uv_texspace = uv.xy * levelsize;
+    vec2 seam = floor(uv_texspace + 0.5);
+    uv_texspace = (uv_texspace-seam)/fwidth(uv_texspace)+seam;
+    uv_texspace = clamp(uv_texspace, seam - 0.5, seam + 0.5);
+    frag_color = texture(sampler2DArray(tex, smp), vec3(uv_texspace/levelsize, uv.z));
 }
 @end
 
