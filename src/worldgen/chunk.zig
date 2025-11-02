@@ -61,7 +61,7 @@ fn get_height(cx: i32, lx: i32, cz: i32, lz: i32) i32 {
     for (0..8) |_| {
         noise += simplex.noise(
             @as(f64, @floatFromInt(cx * CHUNK_SIZE + lx)) * freq,
-            2.0 * 0.001,
+            0 * freq,
             @as(f64, @floatFromInt(cz * CHUNK_SIZE + lz)) * freq,
         ) * amp;
 
