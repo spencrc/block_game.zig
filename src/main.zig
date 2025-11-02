@@ -48,57 +48,58 @@ export fn init() void {
         .logger = .{ .func = slog.func },
     });
 
-    //initialize ztbi
-    zstbi.init(allocator);
-    defer zstbi.deinit();
+    //initialize textures and texture array
+    {
+        //initialize ztbi
+        zstbi.init(allocator);
+        defer zstbi.deinit();
 
-    const texture_names = [_][:0]const u8{
-        "textures/default.png",
-        "textures/dirt.png",
-        "textures/cobblestone.png",
-        "textures/water.png",
-        "textures/grass.png",
-        "textures/sand.png",
-        "textures/snow.png",
-    };
-    var textures: [7][5]Image = undefined;
-    defer for (&textures) |*t|
-        for (t) |*i|
-            i.deinit();
-    for (texture_names, 0..) |name, i| {
-        generate_images(name, &textures[i]) catch @panic("texture load failed");
+        const texture_names = [_][:0]const u8{
+            "textures/default.png",
+            "textures/dirt.png",
+            "textures/cobblestone.png",
+            "textures/water.png",
+            "textures/grass.png",
+            "textures/sand.png",
+            "textures/snow.png",
+        };
+        var textures: [7][5]Image = undefined;
+        defer for (&textures) |*t|
+            for (t) |*i|
+                i.deinit();
+        for (texture_names, 0..) |name, i| {
+            generate_images(name, &textures[i]) catch @panic("texture load failed");
+        }
+
+        const mip0: [7][16][16][4]u8 = fill_mip(16, 16, 0, textures);
+        const mip1: [7][8][8][4]u8 = fill_mip(8, 8, 1, textures);
+        const mip2: [7][4][4][4]u8 = fill_mip(4, 4, 2, textures);
+        const mip3: [7][2][2][4]u8 = fill_mip(2, 2, 3, textures);
+        const mip4: [7][1][1][4]u8 = fill_mip(1, 1, 4, textures);
+
+        view = sg.makeView(.{
+            .texture = .{
+                .image = sg.makeImage(.{
+                    .type = .ARRAY,
+                    .width = 16,
+                    .height = 16,
+                    .num_slices = 7,
+                    .num_mipmaps = 5,
+                    .pixel_format = .RGBA8,
+                    .data = init: {
+                        var data = sg.ImageData{};
+                        data.mip_levels[0] = sg.asRange(&mip0);
+                        data.mip_levels[1] = sg.asRange(&mip1);
+                        data.mip_levels[2] = sg.asRange(&mip2);
+                        data.mip_levels[3] = sg.asRange(&mip3);
+                        data.mip_levels[4] = sg.asRange(&mip4);
+                        break :init data;
+                    },
+                }),
+            },
+        });
     }
 
-    const mip0: [7][16][16][4]u8 = fill_mip(16, 16, 0, textures);
-    const mip1: [7][8][8][4]u8 = fill_mip(8, 8, 1, textures);
-    const mip2: [7][4][4][4]u8 = fill_mip(4, 4, 2, textures);
-    const mip3: [7][2][2][4]u8 = fill_mip(2, 2, 3, textures);
-    const mip4: [7][1][1][4]u8 = fill_mip(1, 1, 4, textures);
-
-    //TODO: make views a global somewhere and transition to using a texture atlas. current implementation only supports one texture (which is bad)
-    view = sg.makeView(.{
-        .texture = .{
-            .image = sg.makeImage(.{
-                .type = .ARRAY,
-                .width = 16,
-                .height = 16,
-                .num_slices = 7,
-                .num_mipmaps = 5,
-                .pixel_format = .RGBA8,
-                .data = init: {
-                    var data = sg.ImageData{};
-                    data.mip_levels[0] = sg.asRange(&mip0);
-                    data.mip_levels[1] = sg.asRange(&mip1);
-                    data.mip_levels[2] = sg.asRange(&mip2);
-                    data.mip_levels[3] = sg.asRange(&mip3);
-                    data.mip_levels[4] = sg.asRange(&mip4);
-                    break :init data;
-                },
-            }),
-        },
-    });
-
-    //TODO: make samplers a global somewhere!
     sampler = sg.makeSampler(.{
         .min_filter = .LINEAR,
         .mag_filter = .LINEAR,
@@ -116,52 +117,56 @@ export fn init() void {
 
     pass_action.colors[0] = .{
         .load_action = .CLEAR,
-        .clear_value = .{ .r = 0.25, .g = 0.5, .b = 0.75, .a = 1 },
+        .clear_value = .{ .r = 0.25, .g = 0.5, .b = 0.75, .a = 1 }, //creates blue backdrop/sky
     };
 
     //make the world!
     world = World.init(allocator);
 
-    var chunks: std.ArrayList(*Chunk) = .empty;
-    defer chunks.deinit(allocator);
-    var total_time: u64 = 0;
-    var n: f64 = 0.0;
+    var pool: std.Thread.Pool = undefined;
+    pool.init(.{
+        .allocator = allocator,
+        .n_jobs = 12,
+    }) catch @panic("pool init failed!");
+    defer pool.deinit();
+
+    var wg: std.Thread.WaitGroup = .{};
+
+    var timer = std.time.Timer.start() catch @panic("timer failed!");
     for (0..RENDER_DISTANCE_LIMIT) |i| {
         for (0..RENDER_DISTANCE_LIMIT) |j| {
             for (0..5) |k| {
-                var timer = std.time.Timer.start() catch @panic("timer failed!");
-                const chunk = world.generate_chunk(@intCast(i), @intCast(k), @intCast(j)) catch @panic("chunk generation fail!");
-                total_time += timer.read();
-                n += 1.0;
-                chunks.append(allocator, chunk) catch @panic("fuck");
+                const x: i32 = @intCast(i);
+                const y: i32 = @intCast(k);
+                const z: i32 = @intCast(j);
+                pool.spawnWg(
+                    &wg,
+                    World.generate_chunk, //unexpected behaviour for this to not allow for error handling, see: https://github.com/ziglang/zig/issues/18810
+                    .{ &world, x, y, z },
+                );
             }
         }
     }
-    std.debug.print("total time taken: {d} ms\n", .{@as(f64, @floatFromInt(total_time)) / 1_000_000});
-    std.debug.print("average time taken: {d} ms\n", .{@as(f64, @floatFromInt(total_time)) / 1_000_000 / n});
-    n = 0;
-    total_time = 0;
-    for (chunks.items) |chunk| {
-        if (chunk.all_air)
-            continue;
-        const x = chunk.pos[0];
-        const y = chunk.pos[1];
-        const z = chunk.pos[2];
-        const neighbours: [6]?*Chunk = .{
-            world.get_chunk(x - 1, y, z),
-            world.get_chunk(x, y - 1, z),
-            world.get_chunk(x, y, z - 1),
-            world.get_chunk(x + 1, y, z),
-            world.get_chunk(x, y + 1, z),
-            world.get_chunk(x, y, z + 1),
-        };
-        var timer = std.time.Timer.start() catch @panic("timer failed!");
-        chunk.greedy_mesh(allocator, neighbours);
-        total_time += timer.read();
-        n += 1.0;
+
+    wg.wait();
+    wg.reset();
+
+    for (0..RENDER_DISTANCE_LIMIT) |i| {
+        for (0..RENDER_DISTANCE_LIMIT) |j| {
+            for (0..5) |k| {
+                const x: i32 = @intCast(i);
+                const y: i32 = @intCast(k);
+                const z: i32 = @intCast(j);
+                pool.spawnWg(
+                    &wg,
+                    World.generate_chunk_mesh,
+                    .{ &world, x, y, z },
+                );
+            }
+        }
     }
-    std.debug.print("total time taken: {d} ms\n", .{@as(f64, @floatFromInt(total_time)) / 1_000_000});
-    std.debug.print("average time taken: {d} ms\n", .{@as(f64, @floatFromInt(total_time)) / 1_000_000 / n});
+    wg.wait();
+    std.debug.print("total time taken for world generation: {d} ms\n", .{@as(f64, @floatFromInt(timer.read())) / 1_000_000});
 }
 
 fn generate_images(name: [:0]const u8, arr: *[5]Image) !void {

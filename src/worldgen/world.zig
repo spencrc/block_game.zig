@@ -9,11 +9,14 @@ const Material = @import("block.zig").Material;
 const CHUNK_SIZE = @import("../constants.zig").CHUNK_SIZE;
 
 allocator: std.mem.Allocator,
-chunks: std.AutoHashMapUnmanaged([3]i32, *Chunk) = .empty,
+m: std.Thread.Mutex,
+chunks: std.AutoHashMapUnmanaged([3]i32, *Chunk),
 
 pub fn init(allocator: std.mem.Allocator) World {
     return .{
         .allocator = allocator,
+        .m = std.Thread.Mutex{},
+        .chunks = .empty,
     };
 }
 
@@ -25,11 +28,33 @@ pub fn deinit(self: *World) void {
     self.chunks.deinit(self.allocator);
 }
 
-pub fn generate_chunk(self: *World, x: i32, y: i32, z: i32) !*Chunk {
-    const chunk_obj = try self.allocator.create(Chunk);
-    chunk_obj.* = Chunk.init(x, y, z, self);
-    try self.chunks.put(self.allocator, .{ x, y, z }, chunk_obj);
-    return chunk_obj;
+pub fn generate_chunk(self: *World, x: i32, y: i32, z: i32) void {
+    const chunk_obj = self.allocator.create(Chunk) catch @panic("out of memory error!");
+    chunk_obj.* = Chunk.init(x, y, z);
+
+    self.m.lock();
+    self.chunks.put(self.allocator, .{ x, y, z }, chunk_obj) catch @panic("out of memory error!");
+    self.m.unlock();
+}
+
+pub fn generate_chunk_mesh(self: *World, cx: i32, cy: i32, cz: i32) void {
+    const chunk = self.get_chunk(cx, cy, cz);
+    if (chunk == null)
+        return;
+    if (chunk.?.all_air)
+        return;
+    const x = chunk.?.pos[0];
+    const y = chunk.?.pos[1];
+    const z = chunk.?.pos[2];
+    const neighbours: [6]?*Chunk = .{
+        self.get_chunk(x - 1, y, z),
+        self.get_chunk(x, y - 1, z),
+        self.get_chunk(x, y, z - 1),
+        self.get_chunk(x + 1, y, z),
+        self.get_chunk(x, y + 1, z),
+        self.get_chunk(x, y, z + 1),
+    };
+    chunk.?.greedy_mesh(self.allocator, neighbours, &self.m);
 }
 
 pub fn get_chunk(self: *World, x: i32, y: i32, z: i32) ?*Chunk {

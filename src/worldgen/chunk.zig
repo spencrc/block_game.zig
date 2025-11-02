@@ -26,11 +26,10 @@ const MAX_CUBES_PER_CHUNK = @import("../constants.zig").MAX_CUBES_PER_CHUNK;
 pos: [3]i32,
 blocks: [CHUNK_SIZE][CHUNK_SIZE][CHUNK_SIZE]Block,
 all_air: bool,
-world: *World,
 ssbo_view: sg.View = undefined, //if unitialized like this, it takes up just 4 bytes
 vertex_count: u32 = 0,
 
-pub fn init(cx: i32, cy: i32, cz: i32, world: *World) Chunk {
+pub fn init(cx: i32, cy: i32, cz: i32) Chunk {
     var blocks: [CHUNK_SIZE][CHUNK_SIZE][CHUNK_SIZE]Block = undefined;
     var all_air = true;
 
@@ -50,7 +49,6 @@ pub fn init(cx: i32, cy: i32, cz: i32, world: *World) Chunk {
         .pos = .{ cx, cy, cz },
         .all_air = all_air,
         .blocks = blocks,
-        .world = world,
     };
 }
 
@@ -72,8 +70,8 @@ fn get_height(cx: i32, lx: i32, cz: i32, lz: i32) i32 {
 }
 
 fn determine_block_type(y: i32, cy: i32, height: i32) Material {
-    const world_y = cy * CHUNK_SIZE + y;
-    if (world_y == height) {
+    const wy = cy * CHUNK_SIZE + y;
+    if (wy == height) {
         if (height <= 70) {
             return .SAND;
         } else if (height <= 95) {
@@ -81,11 +79,11 @@ fn determine_block_type(y: i32, cy: i32, height: i32) Material {
         } else {
             return .SNOW;
         }
-    } else if (world_y == height - 1) {
+    } else if (wy == height - 1) {
         return .DIRT;
-    } else if (world_y < height) {
+    } else if (wy < height) {
         return .STONE;
-    } else if (world_y <= 62) {
+    } else if (wy <= 62) {
         return .WATER;
     } else {
         return .AIR;
@@ -94,7 +92,7 @@ fn determine_block_type(y: i32, cy: i32, height: i32) Material {
 
 //Greedy mesher algorithm implementation in Zig. Works to generate a mesh for a chunk with minimals vertices for performance.
 //Please see here for where the code originates, as it's not my own: https://gist.github.com/Vercidium/a3002bd083cce2bc854c9ff8f0118d33#file-greedyvoxelmeshing-L19
-pub fn greedy_mesh(self: *Chunk, allocator: std.mem.Allocator, neighbours: [6]?*Chunk) void {
+pub fn greedy_mesh(self: *Chunk, allocator: std.mem.Allocator, neighbours: [6]?*Chunk, mutex: *std.Thread.Mutex) void {
     var vertices_list = std.ArrayList(Vertex).empty;
     defer vertices_list.deinit(allocator);
 
@@ -118,18 +116,16 @@ pub fn greedy_mesh(self: *Chunk, allocator: std.mem.Allocator, neighbours: [6]?*
                     pos[u] = @intCast(j);
 
                     // q determines the direction (X, Y or Z) that we are searching
-                    // self.get_block(x,y,z) takes local map positions and returns the block type if it exists within the chunk, otherwise we look to self.world.get_block(x,y,z)
+                    // self.get_block(x,y,z) takes local map positions and returns the block type if it exists within the chunk, otherwise we look to self.get_block_from_neighbours(x,y,z)
                     //   which returns the block type of any block in the world. If the block doesn't exist (i.e it's in a chunk that hasn't been generated), it returns .AIR
                     const blockCurrent: Material = if (pos[d] >= 0)
                         self.get_block(pos[0], pos[1], pos[2])
                     else
                         self.get_block_from_neighbours(pos[0], pos[1], pos[2], neighbours);
-                    //self.world.get_block(pos[0] + self.pos[0] * CHUNK_SIZE, pos[1] + self.pos[1] * CHUNK_SIZE, pos[2] + self.pos[2] * CHUNK_SIZE);
                     const blockCompare: Material = if (pos[d] < CHUNK_SIZE - 1)
                         self.get_block(pos[0] + q[0], pos[1] + q[1], pos[2] + q[2])
                     else
                         self.get_block_from_neighbours(pos[0] + q[0], pos[1] + q[1], pos[2] + q[2], neighbours);
-                    //self.world.get_block(pos[0] + self.pos[0] * CHUNK_SIZE, pos[1] + self.pos[1] * CHUNK_SIZE, pos[2] + self.pos[2] * CHUNK_SIZE);
 
                     // The mask is set to the block type if there is a visible face between two blocks,
                     //   i.e. both aren't empty and both aren't blocks
@@ -207,7 +203,7 @@ pub fn greedy_mesh(self: *Chunk, allocator: std.mem.Allocator, neighbours: [6]?*
                         };
 
                         for (quad) |vertex| {
-                            vertices_list.append(allocator, vertex) catch unreachable;
+                            vertices_list.append(allocator, vertex) catch @panic("out of memory error!");
                         }
 
                         for (0..height) |l| {
@@ -230,7 +226,9 @@ pub fn greedy_mesh(self: *Chunk, allocator: std.mem.Allocator, neighbours: [6]?*
         self.all_air = true;
         return;
     }
-
+    // Here we create a SSBO to be used for vertex pulling for all vertices created for the mesh.
+    //  We passed the world's mutex to lock it down to create the SSBO, as it'll cause a recursive panic otherwise
+    mutex.lock();
     self.ssbo_view = sg.makeView(.{
         .storage_buffer = .{
             .buffer = sg.makeBuffer(.{
@@ -239,6 +237,8 @@ pub fn greedy_mesh(self: *Chunk, allocator: std.mem.Allocator, neighbours: [6]?*
             }),
         },
     });
+    mutex.unlock(); // Unlock here because we don't touch anything (specifically Sokol's GFX header) that might panic when accessed by multiple threads
+
     self.vertex_count = @intCast(vertices_list.items.len);
 }
 
