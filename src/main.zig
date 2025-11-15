@@ -38,6 +38,7 @@ const is_debug: bool = allocator: {
 
 const RENDER_DISTANCE_LIMIT = constants.RENDER_DISTANCE_LIMIT;
 const CHUNK_SIZE = constants.CHUNK_SIZE;
+const HEIGHT_IN_CHUNKS = constants.HEIGHT_IN_CHUNKS;
 
 export fn init() void {
     // initialize sokol-gfx
@@ -135,7 +136,7 @@ export fn init() void {
     var timer = std.time.Timer.start() catch @panic("timer failed!");
     for (0..RENDER_DISTANCE_LIMIT) |i| {
         for (0..RENDER_DISTANCE_LIMIT) |j| {
-            for (0..5) |k| {
+            for (0..HEIGHT_IN_CHUNKS) |k| {
                 const x: i32 = @intCast(i);
                 const y: i32 = @intCast(k);
                 const z: i32 = @intCast(j);
@@ -153,7 +154,7 @@ export fn init() void {
 
     for (0..RENDER_DISTANCE_LIMIT) |i| {
         for (0..RENDER_DISTANCE_LIMIT) |j| {
-            for (0..5) |k| {
+            for (0..HEIGHT_IN_CHUNKS) |k| {
                 const x: i32 = @intCast(i);
                 const y: i32 = @intCast(k);
                 const z: i32 = @intCast(j);
@@ -216,7 +217,7 @@ export fn frame() void {
     //TODO: there is a hard cap on number of chunks due to buffer pool being finite. need to change how buffers work. looking into sg_buffer_append
     for (0..RENDER_DISTANCE_LIMIT) |i| {
         for (0..RENDER_DISTANCE_LIMIT) |j| {
-            for (0..5) |k| {
+            for (0..HEIGHT_IN_CHUNKS) |k| {
                 const chunk = world.get_chunk(@intCast(i), @intCast(k), @intCast(j));
                 if (chunk.?.all_air)
                     continue;

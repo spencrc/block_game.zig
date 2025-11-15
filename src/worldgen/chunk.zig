@@ -63,10 +63,10 @@ fn get_height(cx: i32, lx: i32, cz: i32, lz: i32) i32 {
             @as(f64, @floatFromInt(cz * CHUNK_SIZE + lz)) * freq,
         ) * amp;
 
-        freq *= 2.0;
-        amp *= 0.5;
+        freq *= 1.0;
+        amp *= 1.0;
     }
-    return @intFromFloat(((noise + 1.0)) * 50 + 30);
+    return @intFromFloat(((noise + 1.0)) * 32 + 30);
 }
 
 fn determine_block_type(y: i32, cy: i32, height: i32) Material {
