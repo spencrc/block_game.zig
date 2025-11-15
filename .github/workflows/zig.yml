@@ -1,4 +1,4 @@
-name: zig
+name: Build & Smoke Test
 
 on: [push, pull_request]
 
@@ -22,3 +22,15 @@ jobs:
 
       - name: Build block_game.zig
         run: zig build
+
+      - name: Smoke test (MacOS, Linux)
+        if: runner.os != 'Windows'
+        run: |
+          ./zig-out/bin/Hello_Triangle &
+          PID=$!
+          sleep 30
+          kill $PID || true
+
+      - name: Smoke test (Windows)
+        if: runner.os == 'Windows'
+        run: Start-Process .\zig-out\bin\Hello_Triangle.exe -PassThru | Tee-Object -Variable p; Start-Sleep 30; Stop-Process $p.Id -Force
