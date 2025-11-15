@@ -23,10 +23,18 @@ jobs:
       - name: Build block_game.zig
         run: zig build
 
-      - name: Smoke test (MacOS, Linux)
-        if: runner.os != 'Windows'
+      - name: Smoke test (MacOS)
+        if: runner.os == 'MacOS'
         run: |
           ./zig-out/bin/demo &
+          PID=$!
+          sleep 30
+          kill $PID || true
+
+      - name: Smoke test (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          xvfb-run -a ./zig-out/bin/demo &
           PID=$!
           sleep 30
           kill $PID || true
