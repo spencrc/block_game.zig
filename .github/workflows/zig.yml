@@ -26,11 +26,11 @@ jobs:
       - name: Smoke test (MacOS, Linux)
         if: runner.os != 'Windows'
         run: |
-          ./zig-out/bin/Hello_Triangle &
+          ./zig-out/bin/demo &
           PID=$!
           sleep 30
           kill $PID || true
 
       - name: Smoke test (Windows)
         if: runner.os == 'Windows'
-        run: Start-Process .\zig-out\bin\Hello_Triangle.exe -PassThru | Tee-Object -Variable p; Start-Sleep 30; Stop-Process $p.Id -Force
+        run: Start-Process .\zig-out\bin\demo.exe -PassThru | Tee-Object -Variable p; Start-Sleep 30; Stop-Process $p.Id -Force
