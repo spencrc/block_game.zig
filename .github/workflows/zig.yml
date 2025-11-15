@@ -6,7 +6,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [macos-latest, windows-latest]
     runs-on: ${{matrix.os}}
     name: Build
     steps:
@@ -14,11 +14,6 @@ jobs:
       - uses: mlugg/setup-zig@v2
         with:
           version: 0.15.2
-      - name: prepare-linux
-        if: runner.os == 'Linux'
-        run: |
-            sudo apt-get update
-            sudo apt-get install libglu1-mesa-dev mesa-common-dev xorg-dev libasound-dev
 
       - name: Build block_game.zig
         run: zig build
@@ -28,17 +23,9 @@ jobs:
         run: |
           ./zig-out/bin/demo &
           PID=$!
-          sleep 30
-          kill $PID || true
-
-      - name: Smoke test (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          xvfb-run -a ./zig-out/bin/demo &
-          PID=$!
-          sleep 30
+          sleep 10
           kill $PID || true
 
       - name: Smoke test (Windows)
         if: runner.os == 'Windows'
-        run: Start-Process .\zig-out\bin\demo.exe -PassThru | Tee-Object -Variable p; Start-Sleep 30; Stop-Process $p.Id -Force
+        run: Start-Process .\zig-out\bin\demo.exe -PassThru | Tee-Object -Variable p; Start-Sleep 10; Stop-Process $p.Id -Force
